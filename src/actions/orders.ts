@@ -409,6 +409,56 @@ export async function getOverlaps() {
     return [];
 }
 
+// ─── Resolve Overlap ───────────────────────────────────
+
+export async function resolveOverlap(
+    customerId: string,
+    productId: string,
+    deliveryDate: string,
+    keep: 'weekly' | 'daily'
+) {
+    const supabase = await createClient();
+    const removeType = keep === 'weekly' ? 'daily' : 'weekly';
+
+    // Find order items to delete: items from orders of the type we're removing
+    // that match this customer, product, and delivery date
+    const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('order_type', removeType);
+
+    if (ordersError) return { error: ordersError.message };
+    if (!orders || orders.length === 0) return { error: 'No matching orders found' };
+
+    const orderIds = orders.map((o) => o.id);
+
+    // Delete matching order items
+    const { error: deleteError } = await supabase
+        .from('order_items')
+        .delete()
+        .in('order_id', orderIds)
+        .eq('product_id', productId)
+        .eq('delivery_date', deliveryDate);
+
+    if (deleteError) return { error: deleteError.message };
+
+    // Clean up: delete any orders that now have zero items
+    for (const orderId of orderIds) {
+        const { data: remaining } = await supabase
+            .from('order_items')
+            .select('id')
+            .eq('order_id', orderId)
+            .limit(1);
+
+        if (!remaining || remaining.length === 0) {
+            await supabase.from('orders').delete().eq('id', orderId);
+        }
+    }
+
+    return { success: true };
+}
+
 // ─── Customer Order History ────────────────────────────
 
 export async function getMyOrders() {

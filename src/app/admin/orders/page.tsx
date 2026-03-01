@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getOrders, getOverlaps, deleteOrder } from '@/actions/orders';
+import { getOrders, getOverlaps, deleteOrder, resolveOverlap } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function OrdersPage() {
@@ -15,6 +15,7 @@ export default function OrdersPage() {
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
     const [showOverlapsOnly, setShowOverlapsOnly] = useState(false);
+    const [resolvingKey, setResolvingKey] = useState<string | null>(null);
 
     useEffect(() => { loadData(); }, []);
 
@@ -33,6 +34,16 @@ export default function OrdersPage() {
     async function handleDelete(orderId: string) {
         if (!confirm('Are you sure you want to delete this order? This cannot be undone.')) return;
         await deleteOrder(orderId);
+        loadData();
+    }
+
+    async function handleResolve(ov: any, keep: 'weekly' | 'daily') {
+        const removeLabel = keep === 'weekly' ? 'daily' : 'weekly';
+        if (!confirm(`Keep ${keep} order and remove ${removeLabel} order for ${ov.product_name} on ${ov.delivery_date}?`)) return;
+        const key = `${ov.customer_id}-${ov.product_id}-${ov.delivery_date}`;
+        setResolvingKey(key);
+        await resolveOverlap(ov.customer_id, ov.product_id, ov.delivery_date, keep);
+        setResolvingKey(null);
         loadData();
     }
 
@@ -101,18 +112,47 @@ export default function OrdersPage() {
                                         <th>Date</th>
                                         <th className="text-center">Weekly Qty</th>
                                         <th className="text-center">Daily Qty</th>
+                                        <th className="text-center">Resolve</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {overlaps.map((ov: any, i: number) => (
-                                        <tr key={i}>
-                                            <td className="font-medium">{ov.customer_name}</td>
-                                            <td>{ov.product_name}</td>
-                                            <td>{ov.delivery_date}</td>
-                                            <td className="text-center font-bold text-blue-600">{ov.weekly}</td>
-                                            <td className="text-center font-bold text-green-600">{ov.daily}</td>
-                                        </tr>
-                                    ))}
+                                    {overlaps.map((ov: any, i: number) => {
+                                        const key = `${ov.customer_id}-${ov.product_id}-${ov.delivery_date}`;
+                                        const isResolving = resolvingKey === key;
+                                        return (
+                                            <tr key={i}>
+                                                <td className="font-medium">{ov.customer_name}</td>
+                                                <td>{ov.product_name}</td>
+                                                <td>{ov.delivery_date}</td>
+                                                <td className="text-center font-bold text-blue-600">{ov.weekly}</td>
+                                                <td className="text-center font-bold text-green-600">{ov.daily}</td>
+                                                <td className="text-center">
+                                                    {isResolving ? (
+                                                        <Loader2 size={14} className="animate-spin text-primary mx-auto" />
+                                                    ) : (
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <button
+                                                                onClick={() => handleResolve(ov, 'weekly')}
+                                                                className="btn btn-sm"
+                                                                style={{ padding: '2px 8px', fontSize: '0.7rem', background: '#3b82f6', color: 'white', border: 'none' }}
+                                                                title="Keep weekly order, remove daily"
+                                                            >
+                                                                Keep Weekly
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleResolve(ov, 'daily')}
+                                                                className="btn btn-sm"
+                                                                style={{ padding: '2px 8px', fontSize: '0.7rem', background: '#10b981', color: 'white', border: 'none' }}
+                                                                title="Keep daily order, remove weekly"
+                                                            >
+                                                                Keep Daily
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

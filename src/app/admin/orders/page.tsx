@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getOrders, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
+import { getOrders, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, CheckCircle } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -17,6 +17,7 @@ export default function OrdersPage() {
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
     const [showOverlapsOnly, setShowOverlapsOnly] = useState(false);
     const [resolvingKey, setResolvingKey] = useState<string | null>(null);
 
@@ -54,6 +55,14 @@ export default function OrdersPage() {
         await resolveOverlap(ov.customer_id, ov.product_id, ov.delivery_date, keep);
         setResolvingKey(null);
         loadData();
+    }
+
+    async function handleConfirm(orderId: string) {
+        await confirmOrder(orderId);
+        loadData();
+        if (selectedOrder?.id === orderId) {
+            setSelectedOrder((prev: any) => prev ? { ...prev, status: 'confirmed' } : null);
+        }
     }
 
     function openOrderDetail(order: any) {
@@ -154,6 +163,7 @@ export default function OrdersPage() {
         return orders.filter((o) => {
             if (filterCustomer && o.customer_id !== filterCustomer) return false;
             if (filterType && o.order_type !== filterType) return false;
+            if (filterStatus && o.status !== filterStatus) return false;
             if (showOverlapsOnly && !isOverlapping(o)) return false;
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
@@ -165,7 +175,7 @@ export default function OrdersPage() {
             }
             return true;
         });
-    }, [orders, filterCustomer, filterType, showOverlapsOnly, searchQuery, overlaps]);
+    }, [orders, filterCustomer, filterType, filterStatus, showOverlapsOnly, searchQuery, overlaps]);
 
     if (loading) {
         return (
@@ -302,9 +312,19 @@ export default function OrdersPage() {
                         <option value="weekly">Weekly</option>
                         <option value="daily">Daily</option>
                     </select>
-                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery) && (
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="form-input py-2 text-sm"
+                        style={{ minWidth: '140px' }}
+                    >
+                        <option value="">All Status</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="confirmed">Confirmed</option>
+                    </select>
+                    {(filterCustomer || filterType || filterStatus || showOverlapsOnly || searchQuery) && (
                         <button
-                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchQuery(''); }}
+                            onClick={() => { setFilterCustomer(''); setFilterType(''); setFilterStatus(''); setShowOverlapsOnly(false); setSearchQuery(''); }}
                             className="btn btn-ghost btn-sm"
                         >
                             <X size={14} /> Clear
@@ -320,6 +340,7 @@ export default function OrdersPage() {
                         <tr>
                             <th>Customer</th>
                             <th>Type</th>
+                            <th>Status</th>
                             <th>Date</th>
                             <th>Items</th>
                             <th>Total Qty</th>
@@ -336,6 +357,13 @@ export default function OrdersPage() {
                                         {(order.customer as any)?.name || 'Unknown'}
                                         {hasOverlap && (
                                             <span className="badge badge-danger ml-2 text-xs">OVERLAP</span>
+                                        )}
+                                    </td>
+                                    <td>
+                                        {order.status === 'confirmed' ? (
+                                            <span className="badge badge-success">✓ Confirmed</span>
+                                        ) : (
+                                            <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
                                         )}
                                     </td>
                                     <td>
@@ -360,6 +388,11 @@ export default function OrdersPage() {
                                             <button onClick={() => openOrderDetail(order)} className="btn btn-ghost btn-sm" title="View / Edit">
                                                 <Eye size={14} />
                                             </button>
+                                            {order.status !== 'confirmed' && (
+                                                <button onClick={() => handleConfirm(order.id)} className="btn btn-ghost btn-sm text-success" title="Confirm Order">
+                                                    <CheckCircle size={14} />
+                                                </button>
+                                            )}
                                             <button onClick={() => handleDelete(order.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
                                                 <Trash2 size={14} />
                                             </button>
@@ -430,6 +463,16 @@ export default function OrdersPage() {
                             <div>
                                 <span className="text-muted text-xs">Submitted</span>
                                 <p className="font-bold">{format(new Date(selectedOrder.created_at), 'MMM dd, HH:mm')}</p>
+                            </div>
+                            <div>
+                                <span className="text-muted text-xs">Status</span>
+                                <p>
+                                    {selectedOrder.status === 'confirmed' ? (
+                                        <span className="badge badge-success">✓ Confirmed</span>
+                                    ) : (
+                                        <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
+                                    )}
+                                </p>
                             </div>
                         </div>
 
@@ -546,8 +589,18 @@ export default function OrdersPage() {
                             >
                                 <Trash2 size={14} /> Delete Order
                             </button>
-                            <div className="text-sm text-muted">
-                                Order ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-muted">
+                                    ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
+                                </span>
+                                {selectedOrder.status !== 'confirmed' && (
+                                    <button
+                                        onClick={() => handleConfirm(selectedOrder.id)}
+                                        className="btn btn-success btn-sm"
+                                    >
+                                        <CheckCircle size={14} /> Confirm Order
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

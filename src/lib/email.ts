@@ -1,11 +1,12 @@
 import { Resend } from 'resend';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@bakery.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'St George Bakery <onboarding@resend.dev>';
 
 function getResendClient(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn('RESEND_API_KEY not configured — emails will not be sent.');
+  if (!apiKey || apiKey === 'your_resend_api_key' || apiKey.length < 10) {
+    console.warn('[EMAIL] RESEND_API_KEY not configured — emails will be skipped.');
     return null;
   }
   return new Resend(apiKey);
@@ -23,7 +24,10 @@ interface OrderEmailData {
 export async function sendOrderConfirmationEmail(data: OrderEmailData) {
   try {
     const resend = getResendClient();
-    if (!resend) return { success: false, error: 'Email not configured' };
+    if (!resend) {
+      console.log('[EMAIL] Skipped — no API key. Order by', data.customerName, 'for', data.dates);
+      return { success: false, error: 'Email not configured' };
+    }
 
     const itemRows = data.items
       .map(
@@ -38,8 +42,8 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
     const orderTypeLabel = data.orderType === 'weekly' ? 'Weekly' : 'Daily';
 
     // Send to customer
-    await resend.emails.send({
-      from: 'St George Bakery <orders@yourdomain.com>',
+    const customerResult = await resend.emails.send({
+      from: FROM_EMAIL,
       to: data.customerEmail,
       subject: 'Order Confirmation - ' + orderTypeLabel + ' Order',
       html: [
@@ -68,9 +72,11 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
       ].join(''),
     });
 
+    console.log('[EMAIL] Sent confirmation to', data.customerEmail, customerResult);
+
     // Send notification to admin
-    await resend.emails.send({
-      from: 'St George Bakery <orders@yourdomain.com>',
+    const adminResult = await resend.emails.send({
+      from: FROM_EMAIL,
       to: ADMIN_EMAIL,
       subject: 'New ' + data.orderType + ' Order - ' + data.customerName,
       html: [
@@ -89,9 +95,11 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
       ].join(''),
     });
 
+    console.log('[EMAIL] Sent admin notification to', ADMIN_EMAIL, adminResult);
+
     return { success: true };
   } catch (error) {
-    console.error('Email send error:', error);
-    return { success: false, error };
+    console.error('[EMAIL] Send error:', error);
+    return { success: false, error: String(error) };
   }
 }

@@ -56,24 +56,19 @@ export function canSubmitWeeklyOrder(
 
 /**
  * Check if a daily order can still be submitted for the given delivery_date.
- * Uses the same cutoff logic — the Saturday before the week of the delivery date.
+ * Cutoff: the day BEFORE the delivery date at daily_cutoff_time.
+ * 
+ * Example: If delivery is Thursday Mar 6 and cutoff time is 12:00 PM,
+ * the order must be submitted before Wednesday Mar 5 at 12:00 PM.
  */
 export function canSubmitDailyOrder(
     deliveryDate: Date,
     settings: Settings,
     now: Date = new Date()
 ): { allowed: boolean; cutoffDate: Date; message: string } {
-    // Find the Monday of the delivery date's week
-    const dayOfWeek = getDay(deliveryDate);
-    const mondayOfWeek = dayOfWeek === 1
-        ? startOfDay(deliveryDate)
-        : dayOfWeek === 0
-            ? startOfDay(addDays(deliveryDate, -6))
-            : startOfDay(addDays(deliveryDate, -(dayOfWeek - 1)));
-
-    // The cutoff is relative to the Monday of that week
-    const cutoffBase = addDays(mondayOfWeek, -(7 - settings.weekly_cutoff_day));
-    const cutoffDate = setTime(cutoffBase, settings.daily_cutoff_time);
+    // Cutoff is the day before delivery at the configured daily cutoff time
+    const dayBefore = startOfDay(addDays(deliveryDate, -1));
+    const cutoffDate = setTime(dayBefore, settings.daily_cutoff_time);
 
     const allowed = isBefore(now, cutoffDate);
 

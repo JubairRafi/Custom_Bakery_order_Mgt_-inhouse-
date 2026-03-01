@@ -498,6 +498,35 @@ export async function getMyOrders() {
     return data || [];
 }
 
+export async function getLastWeeklyOrder() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Get the most recent weekly order for this customer
+    const { data: order, error } = await supabase
+        .from('orders')
+        .select('*, order_items(*, product:products(name))')
+        .eq('customer_id', user.id)
+        .eq('order_type', 'weekly')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+    if (error || !order) return null;
+
+    // Return the items with product info
+    return {
+        week_start_date: order.week_start_date,
+        items: (order.order_items || []).map((item: any) => ({
+            product_id: item.product_id,
+            product_name: (item.product as any)?.name || 'Unknown',
+            delivery_date: item.delivery_date,
+            quantity: item.quantity,
+        })),
+    };
+}
+
 // ─── Production Summary ────────────────────────────────
 
 export async function getProductionSummary(date: string) {

@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { getActiveProducts } from '@/actions/products';
 import { getSettings } from '@/actions/settings';
-import { submitWeeklyOrder } from '@/actions/orders';
+import { submitWeeklyOrder, getLastWeeklyOrder } from '@/actions/orders';
 import { getAvailableMondays, canSubmitWeeklyOrder } from '@/lib/cutoff';
 import { format, addDays, parseISO } from 'date-fns';
-import { CalendarDays, Check, AlertTriangle, Loader2, Plus, X, Info } from 'lucide-react';
+import { CalendarDays, Check, AlertTriangle, Loader2, Plus, X, Info, RotateCcw } from 'lucide-react';
 import { Product, Settings } from '@/lib/types';
 
 interface OrderRow {
@@ -28,6 +28,7 @@ export default function WeeklyOrderPage() {
     const [error, setError] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
+    const [loadingLastWeek, setLoadingLastWeek] = useState(false);
 
     useEffect(() => {
         async function loadData() {
@@ -80,6 +81,53 @@ export default function WeeklyOrderPage() {
                 quantities: Object.fromEntries(dates.map((d) => [d, 0])),
             }))
         );
+    }
+
+    async function loadLastWeekOrder() {
+        setLoadingLastWeek(true);
+        try {
+            const lastOrder = await getLastWeeklyOrder();
+            if (!lastOrder || lastOrder.items.length === 0) {
+                alert('No previous weekly order found.');
+                setLoadingLastWeek(false);
+                return;
+            }
+
+            const currentDates = getDatesForWeek(selectedMonday);
+            const lastMonday = parseISO(lastOrder.week_start_date);
+
+            // Map items: use the day-of-week offset to map to current week dates
+            const productMap = new Map<string, { product_name: string; quantities: { [date: string]: number } }>();
+
+            for (const item of lastOrder.items) {
+                const itemDate = parseISO(item.delivery_date);
+                const dayOffset = Math.round((itemDate.getTime() - lastMonday.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (dayOffset >= 0 && dayOffset < 7) {
+                    const targetDate = currentDates[dayOffset];
+                    if (!productMap.has(item.product_id)) {
+                        productMap.set(item.product_id, {
+                            product_name: item.product_name,
+                            quantities: Object.fromEntries(currentDates.map((d) => [d, 0])),
+                        });
+                    }
+                    productMap.get(item.product_id)!.quantities[targetDate] = item.quantity;
+                }
+            }
+
+            // Build rows from the mapped data
+            const newRows: OrderRow[] = Array.from(productMap.entries()).map(([product_id, data]) => ({
+                product_id,
+                product_name: data.product_name,
+                quantities: data.quantities,
+                isDefault: false,
+            }));
+
+            setOrderRows(newRows);
+        } catch (e) {
+            alert('Failed to load last week\'s order.');
+        }
+        setLoadingLastWeek(false);
     }
 
     function updateQuantity(productId: string, date: string, value: number) {
@@ -223,6 +271,18 @@ export default function WeeklyOrderPage() {
                             </option>
                         ))}
                     </select>
+                    <button
+                        onClick={loadLastWeekOrder}
+                        disabled={loadingLastWeek}
+                        className="btn btn-outline btn-sm"
+                        title="Fill with last week's order"
+                    >
+                        {loadingLastWeek ? (
+                            <><Loader2 size={14} className="animate-spin" /> Loading...</>
+                        ) : (
+                            <><RotateCcw size={14} /> Same as Last Week</>
+                        )}
+                    </button>
                 </div>
             </div>
 

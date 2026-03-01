@@ -555,3 +555,70 @@ export async function getProductionSummary(date: string) {
 
     return Array.from(summary.values()).sort((a, b) => a.product_name.localeCompare(b.product_name));
 }
+
+export async function getCustomerWiseReport(startDate: string, endDate: string) {
+    const supabase = await createClient();
+
+    // Fetch order items with product name and order_id
+    const { data: items, error: itemsError } = await supabase
+        .from('order_items')
+        .select('product_id, quantity, delivery_date, order_id, product:products(name)')
+        .gte('delivery_date', startDate)
+        .lte('delivery_date', endDate);
+
+    if (itemsError) throw new Error(itemsError.message);
+    if (!items || items.length === 0) return { customers: [], products: [], grid: {} };
+
+    // Get unique order IDs and fetch orders with customer info
+    const orderIds = [...new Set(items.map((i) => i.order_id))];
+    const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id, customer_id, order_type')
+        .in('id', orderIds);
+
+    if (ordersError) throw new Error(ordersError.message);
+
+    // Fetch customer names
+    const customerIds = [...new Set((orders || []).map((o) => o.customer_id))];
+    const { data: customers } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', customerIds);
+
+    const orderMap = new Map<string, { customer_id: string; order_type: string }>();
+    for (const o of orders || []) {
+        orderMap.set(o.id, { customer_id: o.customer_id, order_type: o.order_type });
+    }
+
+    const customerNameMap = new Map<string, string>();
+    for (const c of customers || []) {
+        customerNameMap.set(c.id, c.name || 'Unknown');
+    }
+
+    // Collect unique products
+    const productMap = new Map<string, string>();
+    for (const item of items) {
+        productMap.set(item.product_id, (item.product as any)?.name || 'Unknown');
+    }
+
+    // Build grid: customer_id -> product_id -> total quantity
+    const grid: { [customerId: string]: { [productId: string]: number } } = {};
+    for (const item of items) {
+        const order = orderMap.get(item.order_id);
+        if (!order) continue;
+        const cId = order.customer_id;
+        if (!grid[cId]) grid[cId] = {};
+        grid[cId][item.product_id] = (grid[cId][item.product_id] || 0) + item.quantity;
+    }
+
+    const customerList = customerIds
+        .map((id) => ({ id, name: customerNameMap.get(id) || 'Unknown' }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const productList = Array.from(productMap.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { customers: customerList, products: productList, grid };
+}
+

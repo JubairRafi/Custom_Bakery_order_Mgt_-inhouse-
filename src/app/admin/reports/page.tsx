@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getProductionSummary } from '@/actions/orders';
-import { BarChart3, Download, Loader2, CalendarDays, Filter } from 'lucide-react';
-import { format, addDays, startOfWeek, parseISO } from 'date-fns';
+import { getProductionSummary, getCustomerWiseReport } from '@/actions/orders';
+import { BarChart3, Download, Loader2, CalendarDays, Users } from 'lucide-react';
+import { format, addDays, parseISO } from 'date-fns';
 import * as XLSX from 'xlsx';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ReportsPage() {
-    const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
+    const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'customer'>('daily');
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [weekStartDate, setWeekStartDate] = useState(() => {
         const now = new Date();
@@ -24,21 +24,39 @@ export default function ReportsPage() {
         dayTotals: number[];
         grandTotal: number;
     } | null>(null);
+    const [customerReport, setCustomerReport] = useState<{
+        customers: { id: string; name: string }[];
+        products: { id: string; name: string }[];
+        grid: { [customerId: string]: { [productId: string]: number } };
+    } | null>(null);
+    const [custStartDate, setCustStartDate] = useState(() => {
+        const now = new Date();
+        const day = now.getDay();
+        const monday = addDays(now, day === 0 ? -6 : 1 - day);
+        return format(monday, 'yyyy-MM-dd');
+    });
+    const [custEndDate, setCustEndDate] = useState(() => {
+        const now = new Date();
+        const day = now.getDay();
+        const sunday = addDays(now, day === 0 ? 0 : 7 - day);
+        return format(sunday, 'yyyy-MM-dd');
+    });
     const [loading, setLoading] = useState(false);
 
     // Load daily summary
     useEffect(() => {
-        if (viewMode === 'daily') {
-            loadDailySummary(selectedDate);
-        }
+        if (viewMode === 'daily') loadDailySummary(selectedDate);
     }, [selectedDate, viewMode]);
 
     // Load weekly summary
     useEffect(() => {
-        if (viewMode === 'weekly') {
-            loadWeeklySummary(weekStartDate);
-        }
+        if (viewMode === 'weekly') loadWeeklySummary(weekStartDate);
     }, [weekStartDate, viewMode]);
+
+    // Load customer report
+    useEffect(() => {
+        if (viewMode === 'customer') loadCustomerReport();
+    }, [custStartDate, custEndDate, viewMode]);
 
     async function loadDailySummary(date: string) {
         setLoading(true);
@@ -51,15 +69,11 @@ export default function ReportsPage() {
         setLoading(true);
         const monday = parseISO(mondayStr);
         const days = Array.from({ length: 7 }, (_, i) => format(addDays(monday, i), 'yyyy-MM-dd'));
-
         const results = await Promise.all(
             days.map((date) => getProductionSummary(date).then((data) => ({ date, data })))
         );
-
-        // Collect all product names
         const allProducts = new Set<string>();
         results.forEach((r) => r.data.forEach((d: any) => allProducts.add(d.product_name)));
-
         const products: { name: string; quantities: number[]; total: number }[] = [];
         for (const name of Array.from(allProducts).sort()) {
             const quantities = results.map((r) => {
@@ -68,19 +82,19 @@ export default function ReportsPage() {
             });
             products.push({ name, quantities, total: quantities.reduce((s, q) => s + q, 0) });
         }
-
-        const dayTotals = results.map((r) =>
-            r.data.reduce((sum: number, d: any) => sum + d.total_quantity, 0)
-        );
-
-        setWeeklySummary({
-            days,
-            products,
-            dayTotals,
-            grandTotal: dayTotals.reduce((s, t) => s + t, 0),
-        });
+        const dayTotals = results.map((r) => r.data.reduce((sum: number, d: any) => sum + d.total_quantity, 0));
+        setWeeklySummary({ days, products, dayTotals, grandTotal: dayTotals.reduce((s, t) => s + t, 0) });
         setLoading(false);
     }
+
+    async function loadCustomerReport() {
+        setLoading(true);
+        const data = await getCustomerWiseReport(custStartDate, custEndDate);
+        setCustomerReport(data);
+        setLoading(false);
+    }
+
+    // ─── Export Functions ───────────────────────────────────
 
     function exportDailyExcel() {
         if (summary.length === 0) return;
@@ -102,10 +116,9 @@ export default function ReportsPage() {
     function exportWeeklyExcel() {
         if (!weeklySummary) return;
         const monday = parseISO(weekStartDate);
-        const headers = ['Product', ...weeklySummary.days.map((d, i) => format(parseISO(d), 'EEE dd/MM')), 'Total'];
+        const headers = ['Product', ...weeklySummary.days.map((d) => format(parseISO(d), 'EEE dd/MM')), 'Total'];
         const rows = weeklySummary.products.map((p) => [p.name, ...p.quantities, p.total]);
         const totalsRow = ['TOTAL', ...weeklySummary.dayTotals, weeklySummary.grandTotal];
-
         const wsData = [
             [`Weekly Production Report — Week of ${format(monday, 'MMMM dd, yyyy')}`],
             [],
@@ -120,12 +133,87 @@ export default function ReportsPage() {
         XLSX.writeFile(wb, `weekly_report_${weekStartDate}.xlsx`);
     }
 
+    function exportCustomerExcel() {
+        if (!customerReport || customerReport.customers.length === 0) return;
+        const headers = ['Customer', ...customerReport.products.map((p) => p.name), 'Total'];
+        const rows = customerReport.customers.map((c) => {
+            const productTotals = customerReport.products.map((p) => customerReport.grid[c.id]?.[p.id] || 0);
+            const total = productTotals.reduce((s, q) => s + q, 0);
+            return [c.name, ...productTotals, total];
+        });
+
+        // Product totals row
+        const productTotalsRow: (string | number)[] = ['TOTAL'];
+        let grandTotal = 0;
+        for (const p of customerReport.products) {
+            const colTotal = customerReport.customers.reduce(
+                (sum, c) => sum + (customerReport.grid[c.id]?.[p.id] || 0), 0
+            );
+            productTotalsRow.push(colTotal);
+            grandTotal += colTotal;
+        }
+        productTotalsRow.push(grandTotal);
+
+        const wsData = [
+            [`Customer-Wise Report — ${format(parseISO(custStartDate), 'MMM dd')} to ${format(parseISO(custEndDate), 'MMM dd, yyyy')}`],
+            [],
+            headers,
+            ...rows,
+            productTotalsRow,
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 25 }, ...Array(customerReport.products.length + 1).fill({ wch: 14 })];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Customer Report');
+        XLSX.writeFile(wb, `customer_report_${custStartDate}_to_${custEndDate}.xlsx`);
+    }
+
     function shiftWeek(offset: number) {
         const current = parseISO(weekStartDate);
         setWeekStartDate(format(addDays(current, offset * 7), 'yyyy-MM-dd'));
     }
 
+    function setCustomerWeekPreset() {
+        const now = new Date();
+        const day = now.getDay();
+        const monday = addDays(now, day === 0 ? -6 : 1 - day);
+        const sunday = addDays(monday, 6);
+        setCustStartDate(format(monday, 'yyyy-MM-dd'));
+        setCustEndDate(format(sunday, 'yyyy-MM-dd'));
+    }
+
+    function setCustomerMonthPreset() {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        setCustStartDate(format(firstDay, 'yyyy-MM-dd'));
+        setCustEndDate(format(lastDay, 'yyyy-MM-dd'));
+    }
+
     const grandTotal = summary.reduce((sum, s) => sum + s.total_quantity, 0);
+
+    // Get export button based on mode
+    function getExportButton() {
+        if (viewMode === 'daily') {
+            return (
+                <button onClick={exportDailyExcel} className="btn btn-primary btn-sm" disabled={summary.length === 0}>
+                    <Download size={14} /> Export Daily
+                </button>
+            );
+        } else if (viewMode === 'weekly') {
+            return (
+                <button onClick={exportWeeklyExcel} className="btn btn-primary btn-sm" disabled={!weeklySummary?.products.length}>
+                    <Download size={14} /> Export Weekly
+                </button>
+            );
+        } else {
+            return (
+                <button onClick={exportCustomerExcel} className="btn btn-primary btn-sm" disabled={!customerReport?.customers.length}>
+                    <Download size={14} /> Export Customer Report
+                </button>
+            );
+        }
+    }
 
     return (
         <div className="animate-fade-in">
@@ -138,15 +226,7 @@ export default function ReportsPage() {
                     <p className="text-muted text-sm mt-1">View and export production summaries</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {viewMode === 'daily' ? (
-                        <button onClick={exportDailyExcel} className="btn btn-primary btn-sm" disabled={summary.length === 0}>
-                            <Download size={14} /> Export Daily
-                        </button>
-                    ) : (
-                        <button onClick={exportWeeklyExcel} className="btn btn-primary btn-sm" disabled={!weeklySummary?.products.length}>
-                            <Download size={14} /> Export Weekly
-                        </button>
-                    )}
+                    {getExportButton()}
                 </div>
             </div>
 
@@ -155,22 +235,18 @@ export default function ReportsPage() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                     {/* View Toggle */}
                     <div className="flex rounded-lg overflow-hidden border border-border" style={{ width: 'fit-content' }}>
-                        <button
-                            onClick={() => setViewMode('daily')}
-                            className={`px-4 py-2 text-sm font-semibold transition-all ${viewMode === 'daily' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-gray-100'}`}
-                        >
-                            Daily
-                        </button>
-                        <button
-                            onClick={() => setViewMode('weekly')}
-                            className={`px-4 py-2 text-sm font-semibold transition-all ${viewMode === 'weekly' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-gray-100'}`}
-                        >
-                            Weekly
-                        </button>
+                        {(['daily', 'weekly', 'customer'] as const).map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                className={`px-4 py-2 text-sm font-semibold transition-all ${viewMode === mode ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-gray-100'}`}
+                            >
+                                {mode === 'customer' ? 'Customer' : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                            </button>
+                        ))}
                     </div>
 
-                    {viewMode === 'daily' ? (
-                        /* Daily date picker */
+                    {viewMode === 'daily' && (
                         <div className="flex items-center gap-4 flex-1">
                             <CalendarDays size={18} className="text-primary" />
                             <input
@@ -197,8 +273,9 @@ export default function ReportsPage() {
                                 })}
                             </div>
                         </div>
-                    ) : (
-                        /* Weekly navigation */
+                    )}
+
+                    {viewMode === 'weekly' && (
                         <div className="flex items-center gap-4 flex-1">
                             <CalendarDays size={18} className="text-primary" />
                             <button onClick={() => shiftWeek(-1)} className="btn btn-ghost btn-sm">&larr; Prev</button>
@@ -218,13 +295,42 @@ export default function ReportsPage() {
                             </button>
                         </div>
                     )}
+
+                    {viewMode === 'customer' && (
+                        <div className="flex items-center gap-4 flex-1 flex-wrap">
+                            <Users size={18} className="text-primary" />
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-muted">From:</label>
+                                <input
+                                    type="date"
+                                    value={custStartDate}
+                                    onChange={(e) => setCustStartDate(e.target.value)}
+                                    className="form-input py-2 text-sm"
+                                    style={{ maxWidth: '170px' }}
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-muted">To:</label>
+                                <input
+                                    type="date"
+                                    value={custEndDate}
+                                    onChange={(e) => setCustEndDate(e.target.value)}
+                                    className="form-input py-2 text-sm"
+                                    style={{ maxWidth: '170px' }}
+                                />
+                            </div>
+                            <div className="flex gap-2 ml-auto">
+                                <button onClick={setCustomerWeekPreset} className="btn btn-ghost btn-sm">This Week</button>
+                                <button onClick={setCustomerMonthPreset} className="btn btn-ghost btn-sm">This Month</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Content */}
             <div className="card">
-                {viewMode === 'daily' ? (
-                    /* Daily Summary */
+                {viewMode === 'daily' && (
                     <>
                         <div className="p-4 border-b border-border">
                             <h3 className="font-bold text-foreground">
@@ -266,8 +372,9 @@ export default function ReportsPage() {
                             </div>
                         )}
                     </>
-                ) : (
-                    /* Weekly Summary Grid */
+                )}
+
+                {viewMode === 'weekly' && (
                     <>
                         <div className="p-4 border-b border-border">
                             <h3 className="font-bold text-foreground">
@@ -326,6 +433,94 @@ export default function ReportsPage() {
                                 <BarChart3 size={40} className="mx-auto mb-3 opacity-30" />
                                 <p className="font-medium">No production data</p>
                                 <p className="text-sm">No orders found for this week.</p>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {viewMode === 'customer' && (
+                    <>
+                        <div className="p-4 border-b border-border">
+                            <h3 className="font-bold text-foreground">
+                                Customer-Wise Report — {format(parseISO(custStartDate), 'MMM dd')} to {format(parseISO(custEndDate), 'MMM dd, yyyy')}
+                            </h3>
+                            <p className="text-xs text-muted mt-1">
+                                Rows = Customers · Columns = Products · Values = Total quantities ordered
+                            </p>
+                        </div>
+                        {loading ? (
+                            <div className="p-12 text-center"><Loader2 className="animate-spin text-primary mx-auto" size={32} /></div>
+                        ) : customerReport && customerReport.customers.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="data-table" style={{ fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ minWidth: '150px', position: 'sticky', left: 0, background: 'var(--surface)', zIndex: 1 }}>
+                                                Customer
+                                            </th>
+                                            {customerReport.products.map((p) => (
+                                                <th key={p.id} className="text-center" style={{ minWidth: '80px' }}>
+                                                    <div style={{ fontSize: '0.75rem', lineHeight: 1.3 }}>{p.name}</div>
+                                                </th>
+                                            ))}
+                                            <th className="text-center" style={{ minWidth: '70px', background: '#f1f5f9' }}>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {customerReport.customers.map((customer) => {
+                                            const rowTotal = customerReport.products.reduce(
+                                                (sum, p) => sum + (customerReport.grid[customer.id]?.[p.id] || 0), 0
+                                            );
+                                            return (
+                                                <tr key={customer.id}>
+                                                    <td className="font-medium" style={{ position: 'sticky', left: 0, background: 'var(--surface)', zIndex: 1 }}>
+                                                        {customer.name}
+                                                    </td>
+                                                    {customerReport.products.map((p) => {
+                                                        const qty = customerReport.grid[customer.id]?.[p.id] || 0;
+                                                        return (
+                                                            <td key={p.id} className="text-center">
+                                                                {qty > 0 ? (
+                                                                    <span className="font-bold text-primary">{qty}</span>
+                                                                ) : (
+                                                                    <span className="text-gray-300">—</span>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="text-center font-bold" style={{ background: '#f1f5f9' }}>{rowTotal}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {/* Product totals row */}
+                                        <tr style={{ background: '#e2e8f0' }}>
+                                            <td className="font-bold" style={{ position: 'sticky', left: 0, background: '#e2e8f0', zIndex: 1 }}>
+                                                TOTAL
+                                            </td>
+                                            {customerReport.products.map((p) => {
+                                                const colTotal = customerReport.customers.reduce(
+                                                    (sum, c) => sum + (customerReport.grid[c.id]?.[p.id] || 0), 0
+                                                );
+                                                return (
+                                                    <td key={p.id} className="text-center font-bold">{colTotal || '—'}</td>
+                                                );
+                                            })}
+                                            <td className="text-center font-bold text-lg" style={{ background: '#cbd5e1', color: 'var(--primary-dark)' }}>
+                                                {customerReport.customers.reduce((sum, c) =>
+                                                    sum + customerReport.products.reduce(
+                                                        (s, p) => s + (customerReport.grid[c.id]?.[p.id] || 0), 0
+                                                    ), 0
+                                                )}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="p-12 text-center text-muted">
+                                <Users size={40} className="mx-auto mb-3 opacity-30" />
+                                <p className="font-medium">No customer data</p>
+                                <p className="text-sm">No orders found for this date range.</p>
                             </div>
                         )}
                     </>

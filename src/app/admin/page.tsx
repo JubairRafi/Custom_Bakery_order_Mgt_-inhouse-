@@ -6,10 +6,10 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 
 export default async function AdminDashboard() {
-    const [customers, products, orders, overlaps] = await Promise.all([
+    const [customers, products, { data: orders, count: totalOrderCount }, overlaps] = await Promise.all([
         getCustomers(),
         getProducts(),
-        getOrders(),
+        getOrders({ pageSize: 8 }),
         getOverlaps(),
     ]);
 
@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
     const todayOrders = orders.filter(
         (o: any) => format(new Date(o.created_at), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
     ).length;
-    const recentOrders = orders.slice(0, 8);
+    const recentOrders = orders;
 
     const stats = [
         {
@@ -34,7 +34,7 @@ export default async function AdminDashboard() {
             href: '/admin/products',
         },
         {
-            label: 'Total Orders', value: orders.length, total: null,
+            label: 'Total Orders', value: totalOrderCount, total: null,
             icon: <ShoppingCart size={22} className="text-white" />,
             gradient: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
             href: '/admin/orders',

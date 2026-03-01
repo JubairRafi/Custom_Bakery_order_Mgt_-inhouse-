@@ -120,6 +120,26 @@ body {
   animation: slideInRight 0.3s ease-out;
 }
 
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
 /* ─── Table Styles ──────────────────────────────────── */
 .data-table {
   width: 100%;
@@ -412,26 +432,38 @@ body {
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 14px;
+  padding: 12px 18px;
   color: var(--sidebar-text);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 500;
-  border-radius: 8px;
-  margin: 2px 12px;
-  transition: all 0.2s;
+  border-radius: 12px;
+  margin: 4px 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   color: white;
+  transform: translateX(4px);
 }
 
 .sidebar-link.active {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
   color: white;
-  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.4);
+  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.5);
+}
+
+.sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.sidebar-link:hover svg,
+.sidebar-link.active svg {
+  opacity: 1;
 }
 
 /* ─── Stat Cards ────────────────────────────────────── */

@@ -10,6 +10,10 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [customers, setCustomers] = useState<any[]>([]);
     const [overlaps, setOverlaps] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -29,15 +33,29 @@ export default function OrdersPage() {
     useEffect(() => { loadData(); }, []);
 
     async function loadData() {
-        const [ords, custs, ovs] = await Promise.all([
-            getOrders(),
+        const [result, custs, ovs] = await Promise.all([
+            getOrders({ page: 1, pageSize: 50 }),
             getCustomers(),
             getOverlaps(),
         ]);
-        setOrders(ords);
+        setOrders(result.data);
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(1);
         setCustomers(custs);
         setOverlaps(ovs);
         setLoading(false);
+    }
+
+    async function loadMore() {
+        setLoadingMore(true);
+        const nextPage = page + 1;
+        const result = await getOrders({ page: nextPage, pageSize: 50 });
+        setOrders((prev) => [...prev, ...result.data]);
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(nextPage);
+        setLoadingMore(false);
     }
 
     async function handleDelete(orderId: string) {
@@ -115,6 +133,12 @@ export default function OrdersPage() {
         setSaving(false);
     }
 
+    // Pre-compute overlap keys as a Set for O(1) lookup
+    const overlapKeySet = useMemo(
+        () => new Set(overlaps.map((o: any) => `${o.customer_id}|${o.product_id}|${o.delivery_date}`)),
+        [overlaps]
+    );
+
     // Build weekly grid data for display
     function buildWeeklyGrid(order: any, items: any[]) {
         if (order.order_type !== 'weekly' || !order.week_start_date) return null;
@@ -129,12 +153,17 @@ export default function OrdersPage() {
             productMap.set(item.product_id, name);
         }
 
+        // Pre-index items by "product_id|delivery_date" for O(1) lookup
+        const itemIndex = new Map<string, any>(
+            items.map((i: any) => [`${i.product_id}|${i.delivery_date}`, i])
+        );
+
         const grid: { product_id: string; product_name: string; quantities: { [date: string]: { qty: number; itemId?: string } } }[] = [];
 
         for (const [productId, productName] of productMap) {
             const quantities: { [date: string]: { qty: number; itemId?: string } } = {};
             for (const day of days) {
-                const item = items.find((i: any) => i.product_id === productId && i.delivery_date === day);
+                const item = itemIndex.get(`${productId}|${day}`);
                 quantities[day] = {
                     qty: item?.quantity || 0,
                     itemId: item?.id,
@@ -149,12 +178,7 @@ export default function OrdersPage() {
     function isOverlapping(order: any): boolean {
         if (!order.order_items) return false;
         return order.order_items.some((item: any) =>
-            overlaps.some(
-                (o: any) =>
-                    o.customer_id === order.customer_id &&
-                    o.product_id === item.product_id &&
-                    o.delivery_date === item.delivery_date
-            )
+            overlapKeySet.has(`${order.customer_id}|${item.product_id}|${item.delivery_date}`)
         );
     }
 
@@ -175,7 +199,7 @@ export default function OrdersPage() {
             }
             return true;
         });
-    }, [orders, filterCustomer, filterType, filterStatus, showOverlapsOnly, searchQuery, overlaps]);
+    }, [orders, filterCustomer, filterType, filterStatus, showOverlapsOnly, searchQuery, overlapKeySet]);
 
     if (loading) {
         return (
@@ -199,7 +223,9 @@ export default function OrdersPage() {
                         <ShoppingCart size={24} className="text-primary" />
                         Order Management
                     </h1>
-                    <p className="text-muted text-sm mt-1">{orders.length} total orders</p>
+                    <p className="text-muted text-sm mt-1">
+                        Showing {orders.length} of {totalCount} orders
+                    </p>
                 </div>
             </div>
 
@@ -407,6 +433,19 @@ export default function OrdersPage() {
                     <div className="p-8 text-center text-muted">No orders found.</div>
                 )}
             </div>
+
+            {hasMore && (
+                <div className="flex justify-center mt-4">
+                    <button
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="btn btn-outline btn-sm"
+                    >
+                        {loadingMore ? <Loader2 size={14} className="animate-spin" /> : null}
+                        {loadingMore ? 'Loading...' : `Load More (${totalCount - orders.length} remaining)`}
+                    </button>
+                </div>
+            )}
 
             {/* Order Detail / Edit Modal */}
             {selectedOrder && (

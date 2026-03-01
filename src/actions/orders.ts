@@ -218,13 +218,19 @@ export async function getOrders(filters?: {
     order_type?: string;
     date_from?: string;
     date_to?: string;
+    page?: number;
+    pageSize?: number;
 }) {
     const supabase = await createClient();
+    const page = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 50;
+    const from = (page - 1) * pageSize;
 
     let query = supabase
         .from('orders')
-        .select('*, customer:users!customer_id(name, email), order_items(*, product:products(name))')
-        .order('created_at', { ascending: false });
+        .select('*, customer:users!customer_id(name, email), order_items(*, product:products(name))', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
 
     if (filters?.customer_id) {
         query = query.eq('customer_id', filters.customer_id);
@@ -239,9 +245,9 @@ export async function getOrders(filters?: {
         query = query.lte('created_at', filters.date_to);
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) throw new Error(error.message);
-    return data;
+    return { data: data ?? [], count: count ?? 0, hasMore: (from + pageSize) < (count ?? 0) };
 }
 
 export async function getOrderById(orderId: string) {
@@ -682,10 +688,11 @@ export async function getWholesaleReport(date: string) {
     const customerNameMap = new Map<string, string>();
     for (const c of customerData || []) customerNameMap.set(c.id, c.name || 'Unknown');
 
-    // Group items by customer
+    // Group items by customer, using a productIndex Map for O(1) product lookup
     const customerGroups = new Map<string, {
         customer_name: string;
         products: { product_name: string; quantity: number; display_order: number }[];
+        productIndex: Map<string, number>;
     }>();
 
     for (const item of items) {
@@ -694,19 +701,21 @@ export async function getWholesaleReport(date: string) {
         const customerName = customerNameMap.get(customerId) || 'Unknown';
 
         if (!customerGroups.has(customerId)) {
-            customerGroups.set(customerId, { customer_name: customerName, products: [] });
+            customerGroups.set(customerId, { customer_name: customerName, products: [], productIndex: new Map() });
         }
 
         const group = customerGroups.get(customerId)!;
-        const existing = group.products.find((p) => p.product_name === (item.product as any)?.name);
-        if (existing) {
-            existing.quantity += item.quantity;
+        const productId = item.product_id;
+        if (group.productIndex.has(productId)) {
+            group.products[group.productIndex.get(productId)!].quantity += item.quantity;
         } else {
+            const idx = group.products.length;
             group.products.push({
                 product_name: (item.product as any)?.name || 'Unknown',
                 quantity: item.quantity,
                 display_order: (item.product as any)?.display_order ?? 999,
             });
+            group.productIndex.set(productId, idx);
         }
     }
 
@@ -715,6 +724,8 @@ export async function getWholesaleReport(date: string) {
         group.products.sort((a, b) => a.display_order - b.display_order || a.product_name.localeCompare(b.product_name));
     }
 
-    // Return sorted by customer name
-    return Array.from(customerGroups.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
+    // Return sorted by customer name (strip internal productIndex)
+    return Array.from(customerGroups.values())
+        .map(({ productIndex: _, ...rest }) => rest)
+        .sort((a, b) => a.customer_name.localeCompare(b.customer_name));
 }

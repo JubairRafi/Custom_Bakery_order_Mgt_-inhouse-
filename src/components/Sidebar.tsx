@@ -48,16 +48,16 @@ export default function Sidebar({ links, userName, userRole }: SidebarProps) {
             {/* Sidebar */}
             <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
                 {/* Header */}
-                <div className="p-5 border-b border-white/10">
+                <div className="p-4 border-b border-white/5">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-accent/20"
                                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
                                 🍞
                             </div>
                             <div>
-                                <h1 className="text-white font-bold text-sm">St George Bakery</h1>
-                                <p className="text-xs opacity-50 text-sidebar-text capitalize">{userRole} Portal</p>
+                                <h1 className="text-white font-bold text-xs leading-tight tracking-tight">St George Bakery</h1>
+                                <p className="text-[9px] font-semibold opacity-60 text-accent uppercase tracking-wider mt-0.5">{userRole} Portal</p>
                             </div>
                         </div>
                         <button
@@ -69,23 +69,9 @@ export default function Sidebar({ links, userName, userRole }: SidebarProps) {
                     </div>
                 </div>
 
-                {/* User Info */}
-                <div className="px-5 py-4 border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
-                            style={{ background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: 'white' }}>
-                            {userName?.charAt(0)?.toUpperCase() || 'U'}
-                        </div>
-                        <div>
-                            <p className="text-white text-sm font-medium">{userName}</p>
-                            <p className="text-xs text-sidebar-text opacity-60 capitalize">{userRole}</p>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Navigation */}
                 <nav className="flex-1 py-4 overflow-y-auto">
-                    <p className="px-5 mb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-text opacity-40">
+                    <p className="px-5 mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-text opacity-30">
                         Navigation
                     </p>
                     {links.map((link) => {
@@ -99,20 +85,31 @@ export default function Sidebar({ links, userName, userRole }: SidebarProps) {
                             >
                                 {link.icon}
                                 <span className="flex-1">{link.label}</span>
-                                {isActive && <ChevronRight size={14} className="opacity-60" />}
+                                {isActive && <ChevronRight size={12} className="opacity-40" />}
                             </Link>
                         );
                     })}
                 </nav>
 
-                {/* Logout */}
-                <div className="p-4 border-t border-white/10">
+                {/* Footer: User Info + Logout */}
+                <div className="p-4 border-t border-white/5 bg-white/[0.01]">
+                    <div className="flex items-center gap-3 px-2 py-3 mb-2 border-b border-white/5">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shadow-inner"
+                            style={{ background: 'linear-gradient(135deg, #475569, #1e293b)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            {userName?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-white text-xs font-semibold tracking-tight truncate">{userName}</p>
+                            <p className="text-[9px] text-accent opacity-50 font-bold uppercase tracking-widest">{userRole}</p>
+                        </div>
+                    </div>
+
                     <form action={logout}>
                         <button
                             type="submit"
-                            className="sidebar-link w-full text-red-400 hover:!text-red-300 hover:!bg-red-500/10"
+                            className="sidebar-link w-full text-red-500 hover:!text-red-400 hover:!bg-red-500/5 !m-0 !px-3 !py-2 !gap-3 text-[13px] font-semibold"
                         >
-                            <LogOut size={18} />
+                            <LogOut size={16} />
                             <span>Sign Out</span>
                         </button>
                     </form>

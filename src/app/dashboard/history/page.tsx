@@ -1,23 +1,112 @@
-import { getMyOrders } from '@/actions/orders';
-import { History, CalendarDays, CalendarPlus, Package } from 'lucide-react';
-import { format } from 'date-fns';
+'use client';
 
-export default async function OrderHistoryPage() {
-    const orders = await getMyOrders();
+import { useState, useEffect, useMemo } from 'react';
+import { getMyOrders } from '@/actions/orders';
+import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, X } from 'lucide-react';
+import { format, addDays, parseISO } from 'date-fns';
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export default function OrderHistoryPage() {
+    const [orders, setOrders] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState('');
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+    useEffect(() => {
+        getMyOrders().then((data) => {
+            setOrders(data);
+            setLoading(false);
+        });
+    }, []);
+
+    const filteredOrders = useMemo(() => {
+        return orders.filter((o) => {
+            if (filterType && o.order_type !== filterType) return false;
+            if (searchQuery) {
+                const q = searchQuery.toLowerCase();
+                const date = o.order_type === 'weekly' ? (o.week_start_date || '') : (o.delivery_date || '');
+                const hasProduct = o.order_items?.some((item: any) =>
+                    (item.product?.name || '').toLowerCase().includes(q)
+                );
+                if (!date.includes(q) && !o.order_type.includes(q) && !hasProduct) return false;
+            }
+            return true;
+        });
+    }, [orders, searchQuery, filterType]);
+
+    // Build weekly grid for display
+    function buildWeeklyGrid(order: any) {
+        if (order.order_type !== 'weekly' || !order.week_start_date) return null;
+        const weekStart = parseISO(order.week_start_date);
+        const days = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), 'yyyy-MM-dd'));
+
+        const productMap = new Map<string, string>();
+        for (const item of order.order_items || []) {
+            productMap.set(item.product_id, item.product?.name || 'Unknown');
+        }
+
+        const grid: { product_name: string; quantities: { [date: string]: number } }[] = [];
+        for (const [productId, productName] of productMap) {
+            const quantities: { [date: string]: number } = {};
+            for (const day of days) {
+                const item = (order.order_items || []).find(
+                    (i: any) => i.product_id === productId && i.delivery_date === day
+                );
+                quantities[day] = item?.quantity || 0;
+            }
+            grid.push({ product_name: productName, quantities });
+        }
+
+        return { days, grid };
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-24">
+                <Loader2 className="animate-spin text-primary" size={36} />
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fade-in">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                    <History size={24} className="text-primary" />
-                    Order History
-                </h1>
-                <p className="text-muted text-sm mt-1">All your submitted orders</p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                        <History size={24} className="text-primary" />
+                        Order History
+                    </h1>
+                    <p className="text-muted text-sm mt-1">{orders.length} total orders</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                        <input
+                            type="text"
+                            placeholder="Search by date, product..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="form-input pl-9 py-2 text-sm"
+                            style={{ minWidth: '220px' }}
+                        />
+                    </div>
+                    <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="form-input py-2 text-sm"
+                    >
+                        <option value="">All Types</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
             </div>
 
-            {orders.length > 0 ? (
+            {filteredOrders.length > 0 ? (
                 <div className="space-y-4">
-                    {orders.map((order: any) => (
+                    {filteredOrders.map((order: any) => (
                         <div key={order.id} className="card animate-fade-in">
                             <div className="p-5 border-b border-border flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                                 <div className="flex items-center gap-3">
@@ -41,52 +130,108 @@ export default async function OrderHistoryPage() {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3">
                                     <span className={`badge ${order.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>
                                         {order.order_type}
                                     </span>
                                     <span className="text-xs text-muted">
-                                        Submitted: {format(new Date(order.created_at), 'MMM dd, yyyy HH:mm')}
+                                        {format(new Date(order.created_at), 'MMM dd, yyyy HH:mm')}
                                     </span>
+                                    <button
+                                        onClick={() => setSelectedOrder(selectedOrder?.id === order.id ? null : order)}
+                                        className="btn btn-ghost btn-sm"
+                                    >
+                                        <Eye size={14} /> {selectedOrder?.id === order.id ? 'Hide' : 'View'}
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Order Items */}
-                            <div className="p-4">
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Product</th>
-                                            <th>Delivery Date</th>
-                                            <th className="text-center">Quantity</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {order.order_items?.map((item: any) => (
-                                            <tr key={item.id}>
-                                                <td className="font-medium">{item.product?.name || 'Unknown'}</td>
-                                                <td className="text-muted">{item.delivery_date}</td>
-                                                <td className="text-center font-bold text-primary">{item.quantity}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                <div className="mt-3 text-right text-sm text-muted">
-                                    <Package size={14} className="inline mr-1" />
-                                    {order.order_items?.length || 0} product entries ·
-                                    Total: <strong className="text-primary">
-                                        {order.order_items?.reduce((sum: number, i: any) => sum + i.quantity, 0) || 0}
-                                    </strong> items
+                            {/* Expanded detail view */}
+                            {selectedOrder?.id === order.id && (
+                                <div className="p-4">
+                                    {order.order_type === 'weekly' ? (
+                                        (() => {
+                                            const gridData = buildWeeklyGrid(order);
+                                            if (!gridData) return null;
+                                            return (
+                                                <div className="overflow-x-auto">
+                                                    <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                                                        <thead>
+                                                            <tr>
+                                                                <th style={{ minWidth: '150px' }}>Product</th>
+                                                                {gridData.days.map((day, i) => (
+                                                                    <th key={day} className="text-center" style={{ minWidth: '65px' }}>
+                                                                        <div>{DAY_LABELS[i]}</div>
+                                                                        <div style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.7 }}>
+                                                                            {format(parseISO(day), 'dd/MM')}
+                                                                        </div>
+                                                                    </th>
+                                                                ))}
+                                                                <th className="text-center">Total</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {gridData.grid.map((row, i) => {
+                                                                const total = Object.values(row.quantities).reduce((s, q) => s + q, 0);
+                                                                return (
+                                                                    <tr key={i}>
+                                                                        <td className="font-medium">{row.product_name}</td>
+                                                                        {gridData.days.map((day) => (
+                                                                            <td key={day} className="text-center">
+                                                                                {row.quantities[day] > 0 ? (
+                                                                                    <span className="font-bold text-primary">{row.quantities[day]}</span>
+                                                                                ) : (
+                                                                                    <span className="text-gray-300">—</span>
+                                                                                )}
+                                                                            </td>
+                                                                        ))}
+                                                                        <td className="text-center font-bold" style={{ background: '#f1f5f9' }}>{total}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            );
+                                        })()
+                                    ) : (
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Product</th>
+                                                    <th>Delivery Date</th>
+                                                    <th className="text-center">Quantity</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {order.order_items?.map((item: any) => (
+                                                    <tr key={item.id}>
+                                                        <td className="font-medium">{item.product?.name || 'Unknown'}</td>
+                                                        <td className="text-muted">{item.delivery_date}</td>
+                                                        <td className="text-center font-bold text-primary">{item.quantity}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                    <div className="mt-3 text-right text-sm text-muted">
+                                        <Package size={14} className="inline mr-1" />
+                                        Total: <strong className="text-primary">
+                                            {order.order_items?.reduce((sum: number, i: any) => sum + i.quantity, 0) || 0}
+                                        </strong> items
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     ))}
                 </div>
             ) : (
                 <div className="card p-12 text-center">
                     <History size={48} className="mx-auto mb-3 text-muted opacity-30" />
-                    <h3 className="text-lg font-bold text-foreground">No orders yet</h3>
-                    <p className="text-muted text-sm mt-1">Your order history will appear here after you submit orders.</p>
+                    <h3 className="text-lg font-bold text-foreground">No orders found</h3>
+                    <p className="text-muted text-sm mt-1">
+                        {searchQuery || filterType ? 'Try adjusting your search or filters.' : 'Your order history will appear here after you submit orders.'}
+                    </p>
                 </div>
             )}
         </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getProducts, createProduct, updateProduct, toggleProductStatus } from '@/actions/products';
-import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, GripVertical } from 'lucide-react';
+import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, GripVertical, Search } from 'lucide-react';
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<any[]>([]);
@@ -11,6 +11,17 @@ export default function ProductsPage() {
     const [showEditModal, setShowEditModal] = useState<any>(null);
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+
+    const filteredProducts = useMemo(() => {
+        return products.filter((p) => {
+            if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (statusFilter === 'active' && !p.active_status) return false;
+            if (statusFilter === 'inactive' && p.active_status) return false;
+            return true;
+        });
+    }, [products, searchQuery, statusFilter]);
 
     useEffect(() => { loadData(); }, []);
 
@@ -74,9 +85,31 @@ export default function ProductsPage() {
                         {products.filter((p) => p.active_status).length} active of {products.length} total
                     </p>
                 </div>
-                <button onClick={() => { setShowCreateModal(true); setFormError(''); }} className="btn btn-primary btn-sm">
-                    <Plus size={16} /> Add Product
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                        <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="form-input pl-9 py-2 text-sm"
+                            style={{ minWidth: '220px' }}
+                        />
+                    </div>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="form-input py-2 text-sm"
+                    >
+                        <option value="all">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                    <button onClick={() => { setShowCreateModal(true); setFormError(''); }} className="btn btn-primary btn-sm">
+                        <Plus size={16} /> Add Product
+                    </button>
+                </div>
             </div>
 
             <div className="card">
@@ -91,7 +124,7 @@ export default function ProductsPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((p, index) => (
+                        {filteredProducts.map((p, index) => (
                             <tr key={p.id} className={!p.active_status ? 'opacity-50' : ''}>
                                 <td className="text-center text-muted font-mono text-sm">{index + 1}</td>
                                 <td className="font-bold">{p.name}</td>
@@ -119,8 +152,8 @@ export default function ProductsPage() {
                         ))}
                     </tbody>
                 </table>
-                {products.length === 0 && (
-                    <div className="p-8 text-center text-muted">No products added yet.</div>
+                {filteredProducts.length === 0 && (
+                    <div className="p-8 text-center text-muted">No products found.</div>
                 )}
             </div>
 

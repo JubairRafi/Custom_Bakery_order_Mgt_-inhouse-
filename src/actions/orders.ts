@@ -529,13 +529,39 @@ export async function getLastWeeklyOrder() {
 
 // ─── Production Summary ────────────────────────────────
 
-export async function getProductionSummary(date: string) {
+export async function getProductionSummary(date: string, customerId?: string) {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
-        .from('order_items')
-        .select('product_id, quantity, product:products(name)')
-        .eq('delivery_date', date);
+    let data: any[] | null;
+    let error: any;
+
+    if (customerId) {
+        // Get order IDs for this customer on this date
+        const { data: orders } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('customer_id', customerId);
+
+        const orderIds = (orders || []).map((o) => o.id);
+        if (orderIds.length === 0) return [];
+
+        const result = await supabase
+            .from('order_items')
+            .select('product_id, quantity, product:products(name)')
+            .eq('delivery_date', date)
+            .in('order_id', orderIds);
+
+        data = result.data;
+        error = result.error;
+    } else {
+        const result = await supabase
+            .from('order_items')
+            .select('product_id, quantity, product:products(name)')
+            .eq('delivery_date', date);
+
+        data = result.data;
+        error = result.error;
+    }
 
     if (error) throw new Error(error.message);
     if (!data) return [];
@@ -622,3 +648,73 @@ export async function getCustomerWiseReport(startDate: string, endDate: string) 
     return { customers: customerList, products: productList, grid };
 }
 
+// ─── Wholesale / Per-Customer Report ────────────────────
+
+export async function getWholesaleReport(date: string) {
+    const supabase = await createClient();
+
+    // Get all order items for this delivery date
+    const { data: items, error } = await supabase
+        .from('order_items')
+        .select('product_id, quantity, order_id, product:products(name, display_order)')
+        .eq('delivery_date', date);
+
+    if (error) throw new Error(error.message);
+    if (!items || items.length === 0) return [];
+
+    // Get associated orders
+    const orderIds = [...new Set(items.map((i) => i.order_id))];
+    const { data: orders } = await supabase
+        .from('orders')
+        .select('id, customer_id')
+        .in('id', orderIds);
+
+    // Get customer names
+    const customerIds = [...new Set((orders || []).map((o) => o.customer_id))];
+    const { data: customerData } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', customerIds);
+
+    const orderToCustomer = new Map<string, string>();
+    for (const o of orders || []) orderToCustomer.set(o.id, o.customer_id);
+
+    const customerNameMap = new Map<string, string>();
+    for (const c of customerData || []) customerNameMap.set(c.id, c.name || 'Unknown');
+
+    // Group items by customer
+    const customerGroups = new Map<string, {
+        customer_name: string;
+        products: { product_name: string; quantity: number; display_order: number }[];
+    }>();
+
+    for (const item of items) {
+        const customerId = orderToCustomer.get(item.order_id);
+        if (!customerId) continue;
+        const customerName = customerNameMap.get(customerId) || 'Unknown';
+
+        if (!customerGroups.has(customerId)) {
+            customerGroups.set(customerId, { customer_name: customerName, products: [] });
+        }
+
+        const group = customerGroups.get(customerId)!;
+        const existing = group.products.find((p) => p.product_name === (item.product as any)?.name);
+        if (existing) {
+            existing.quantity += item.quantity;
+        } else {
+            group.products.push({
+                product_name: (item.product as any)?.name || 'Unknown',
+                quantity: item.quantity,
+                display_order: (item.product as any)?.display_order ?? 999,
+            });
+        }
+    }
+
+    // Sort products within each customer by display_order
+    for (const group of customerGroups.values()) {
+        group.products.sort((a, b) => a.display_order - b.display_order || a.product_name.localeCompare(b.product_name));
+    }
+
+    // Return sorted by customer name
+    return Array.from(customerGroups.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
+}

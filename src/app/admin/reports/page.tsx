@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getProductionSummary, getCustomerWiseReport } from '@/actions/orders';
-import { BarChart3, Download, Loader2, CalendarDays, Users } from 'lucide-react';
+import { getProductionSummary, getCustomerWiseReport, getWholesaleReport } from '@/actions/orders';
+import { getCustomers } from '@/actions/users';
+import { BarChart3, Download, Loader2, CalendarDays, Users, List } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import * as XLSX from 'xlsx';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ReportsPage() {
-    const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'customer'>('daily');
+    const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'customer' | 'wholesale'>('daily');
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [weekStartDate, setWeekStartDate] = useState(() => {
         const now = new Date();
@@ -42,35 +43,49 @@ export default function ReportsPage() {
         return format(sunday, 'yyyy-MM-dd');
     });
     const [loading, setLoading] = useState(false);
+    const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+    const [filterCustomer, setFilterCustomer] = useState('');
+    const [wholesaleDate, setWholesaleDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [wholesaleData, setWholesaleData] = useState<{ customer_name: string; products: { product_name: string; quantity: number }[] }[]>([]);
+
+    // Load customers for filter dropdown
+    useEffect(() => {
+        getCustomers().then((data: any[]) => setCustomers(data.map((c: any) => ({ id: c.id, name: c.name }))));
+    }, []);
 
     // Load daily summary
     useEffect(() => {
-        if (viewMode === 'daily') loadDailySummary(selectedDate);
-    }, [selectedDate, viewMode]);
+        if (viewMode === 'daily') loadDailySummary(selectedDate, filterCustomer || undefined);
+    }, [selectedDate, viewMode, filterCustomer]);
 
     // Load weekly summary
     useEffect(() => {
-        if (viewMode === 'weekly') loadWeeklySummary(weekStartDate);
-    }, [weekStartDate, viewMode]);
+        if (viewMode === 'weekly') loadWeeklySummary(weekStartDate, filterCustomer || undefined);
+    }, [weekStartDate, viewMode, filterCustomer]);
 
     // Load customer report
     useEffect(() => {
         if (viewMode === 'customer') loadCustomerReport();
     }, [custStartDate, custEndDate, viewMode]);
 
-    async function loadDailySummary(date: string) {
+    // Load wholesale report
+    useEffect(() => {
+        if (viewMode === 'wholesale') loadWholesaleReport(wholesaleDate);
+    }, [wholesaleDate, viewMode]);
+
+    async function loadDailySummary(date: string, customerId?: string) {
         setLoading(true);
-        const data = await getProductionSummary(date);
+        const data = await getProductionSummary(date, customerId);
         setSummary(data);
         setLoading(false);
     }
 
-    async function loadWeeklySummary(mondayStr: string) {
+    async function loadWeeklySummary(mondayStr: string, customerId?: string) {
         setLoading(true);
         const monday = parseISO(mondayStr);
         const days = Array.from({ length: 7 }, (_, i) => format(addDays(monday, i), 'yyyy-MM-dd'));
         const results = await Promise.all(
-            days.map((date) => getProductionSummary(date).then((data) => ({ date, data })))
+            days.map((date) => getProductionSummary(date, customerId).then((data) => ({ date, data })))
         );
         const allProducts = new Set<string>();
         results.forEach((r) => r.data.forEach((d: any) => allProducts.add(d.product_name)));
@@ -91,6 +106,13 @@ export default function ReportsPage() {
         setLoading(true);
         const data = await getCustomerWiseReport(custStartDate, custEndDate);
         setCustomerReport(data);
+        setLoading(false);
+    }
+
+    async function loadWholesaleReport(date: string) {
+        setLoading(true);
+        const data = await getWholesaleReport(date);
+        setWholesaleData(data);
         setLoading(false);
     }
 
@@ -206,6 +228,12 @@ export default function ReportsPage() {
                     <Download size={14} /> Export Weekly
                 </button>
             );
+        } else if (viewMode === 'wholesale') {
+            return (
+                <button onClick={exportWholesaleExcel} className="btn btn-primary btn-sm" disabled={wholesaleData.length === 0}>
+                    <Download size={14} /> Export Wholesale
+                </button>
+            );
         } else {
             return (
                 <button onClick={exportCustomerExcel} className="btn btn-primary btn-sm" disabled={!customerReport?.customers.length}>
@@ -213,6 +241,27 @@ export default function ReportsPage() {
                 </button>
             );
         }
+    }
+
+    function exportWholesaleExcel() {
+        if (wholesaleData.length === 0) return;
+        const wsData: any[][] = [
+            ['Wholesale — ' + format(parseISO(wholesaleDate), 'EEEE, MMMM dd, yyyy')],
+            [],
+            ['Customer / Product', 'Quantity'],
+        ];
+        for (const group of wholesaleData) {
+            wsData.push([group.customer_name.toUpperCase(), '']);
+            for (const p of group.products) {
+                wsData.push([p.product_name, p.quantity]);
+            }
+            wsData.push([]);
+        }
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 35 }, { wch: 12 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Wholesale');
+        XLSX.writeFile(wb, `wholesale_${wholesaleDate}.xlsx`);
     }
 
     return (
@@ -235,13 +284,13 @@ export default function ReportsPage() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                     {/* View Toggle */}
                     <div className="flex rounded-lg overflow-hidden border border-border" style={{ width: 'fit-content' }}>
-                        {(['daily', 'weekly', 'customer'] as const).map((mode) => (
+                        {(['daily', 'weekly', 'customer', 'wholesale'] as const).map((mode) => (
                             <button
                                 key={mode}
                                 onClick={() => setViewMode(mode)}
                                 className={`px-4 py-2 text-sm font-semibold transition-all ${viewMode === mode ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-gray-100'}`}
                             >
-                                {mode === 'customer' ? 'Customer' : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                {mode === 'customer' ? 'Customer' : mode === 'wholesale' ? 'Wholesale' : mode.charAt(0).toUpperCase() + mode.slice(1)}
                             </button>
                         ))}
                     </div>
@@ -272,6 +321,17 @@ export default function ReportsPage() {
                                     );
                                 })}
                             </div>
+                            <select
+                                value={filterCustomer}
+                                onChange={(e) => setFilterCustomer(e.target.value)}
+                                className="form-input py-2 text-sm"
+                                style={{ minWidth: '180px' }}
+                            >
+                                <option value="">All Customers</option>
+                                {customers.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
                         </div>
                     )}
 
@@ -289,10 +349,21 @@ export default function ReportsPage() {
                                     const day = now.getDay();
                                     setWeekStartDate(format(addDays(now, day === 0 ? -6 : 1 - day), 'yyyy-MM-dd'));
                                 }}
-                                className="btn btn-outline btn-sm ml-auto"
+                                className="btn btn-outline btn-sm"
                             >
                                 This Week
                             </button>
+                            <select
+                                value={filterCustomer}
+                                onChange={(e) => setFilterCustomer(e.target.value)}
+                                className="form-input py-2 text-sm ml-auto"
+                                style={{ minWidth: '180px' }}
+                            >
+                                <option value="">All Customers</option>
+                                {customers.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
                         </div>
                     )}
 
@@ -325,11 +396,107 @@ export default function ReportsPage() {
                             </div>
                         </div>
                     )}
+
+                    {viewMode === 'wholesale' && (
+                        <div className="flex items-center gap-4 flex-1">
+                            <List size={18} className="text-primary" />
+                            <input
+                                type="date"
+                                value={wholesaleDate}
+                                onChange={(e) => setWholesaleDate(e.target.value)}
+                                className="form-input py-2 text-sm"
+                                style={{ maxWidth: '200px' }}
+                            />
+                            <div className="flex gap-2 ml-auto flex-wrap">
+                                {[0, 1, 2, 3, 4, 5, 6].map((offset) => {
+                                    const d = format(addDays(new Date(), offset), 'yyyy-MM-dd');
+                                    return (
+                                        <button key={offset} onClick={() => setWholesaleDate(d)}
+                                            className={`btn btn-sm ${d === wholesaleDate ? 'btn-primary' : 'btn-ghost'}`}
+                                            style={{ minWidth: 'auto', padding: '4px 10px' }}
+                                        >
+                                            {offset === 0 ? 'Today' : format(addDays(new Date(), offset), 'EEE')}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Content */}
             <div className="card">
+                {viewMode === 'wholesale' && (
+                    <>
+                        <div className="p-4 border-b border-border flex items-center justify-between">
+                            <h3 className="font-bold text-foreground">
+                                Wholesale — {format(parseISO(wholesaleDate), 'EEEE, MMMM dd, yyyy')}
+                            </h3>
+                            <span className="text-xs text-muted">{wholesaleData.length} customers</span>
+                        </div>
+                        {loading ? (
+                            <div className="p-12 text-center"><Loader2 className="animate-spin text-primary mx-auto" size={32} /></div>
+                        ) : wholesaleData.length > 0 ? (
+                            <div style={{ maxWidth: '480px', margin: '0 auto', padding: '16px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Restaurant / Order</th>
+                                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600, width: '90px' }}>Quantity</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {wholesaleData.map((group, gi) => (
+                                            <>
+                                                {/* Customer heading row */}
+                                                <tr key={`h-${gi}`}>
+                                                    <td colSpan={2} style={{
+                                                        padding: '10px 12px 4px',
+                                                        fontWeight: 700,
+                                                        color: '#dc2626',
+                                                        fontSize: '0.9rem',
+                                                        borderTop: gi > 0 ? '12px solid #f8fafc' : undefined,
+                                                    }}>
+                                                        {group.customer_name}
+                                                    </td>
+                                                </tr>
+                                                {/* Product rows */}
+                                                {group.products.map((p, pi) => (
+                                                    <tr key={`p-${gi}-${pi}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '5px 12px 5px 20px', color: '#374151' }}>{p.product_name}</td>
+                                                        <td style={{ textAlign: 'center', padding: '5px 12px' }}>
+                                                            {p.quantity > 0 ? (
+                                                                <span style={{
+                                                                    background: '#dc2626',
+                                                                    color: 'white',
+                                                                    fontWeight: 700,
+                                                                    padding: '2px 10px',
+                                                                    borderRadius: '3px',
+                                                                    display: 'inline-block',
+                                                                    minWidth: '36px',
+                                                                }}>{p.quantity}</span>
+                                                            ) : (
+                                                                <span style={{ color: '#9ca3af' }}>0</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="p-12 text-center text-muted">
+                                <List size={40} className="mx-auto mb-3 opacity-30" />
+                                <p className="font-medium">No wholesale data</p>
+                                <p className="text-sm">No orders found for this date.</p>
+                            </div>
+                        )}
+                    </>
+                )}
+
                 {viewMode === 'daily' && (
                     <>
                         <div className="p-4 border-b border-border">

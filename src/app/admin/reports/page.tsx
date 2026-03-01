@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { getProductionSummary, getCustomerWiseReport, getWholesaleReport } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { BarChart3, Download, Loader2, CalendarDays, Users, List } from 'lucide-react';
+import { BarChart3, Download, Loader2, CalendarDays, Users, List, Printer } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import * as XLSX from 'xlsx';
 
@@ -230,9 +230,14 @@ export default function ReportsPage() {
             );
         } else if (viewMode === 'wholesale') {
             return (
-                <button onClick={exportWholesaleExcel} className="btn btn-primary btn-sm" disabled={wholesaleData.length === 0}>
-                    <Download size={14} /> Export Wholesale
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={printWholesale} className="btn btn-ghost btn-sm" disabled={wholesaleData.length === 0}>
+                        <Printer size={14} /> Print
+                    </button>
+                    <button onClick={exportWholesaleExcel} className="btn btn-primary btn-sm" disabled={wholesaleData.length === 0}>
+                        <Download size={14} /> Export
+                    </button>
+                </div>
             );
         } else {
             return (
@@ -262,6 +267,63 @@ export default function ReportsPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Wholesale');
         XLSX.writeFile(wb, `wholesale_${wholesaleDate}.xlsx`);
+    }
+
+    function printWholesale() {
+        if (wholesaleData.length === 0) return;
+        const dateLabel = format(parseISO(wholesaleDate), 'EEEE, MMMM dd, yyyy');
+
+        const rows = wholesaleData.map((group) => {
+            const productRows = group.products.map((p) =>
+                `<tr>
+                    <td style="padding:5px 12px 5px 24px;color:#374151;border-bottom:1px solid #f1f5f9">${p.product_name}</td>
+                    <td style="text-align:center;padding:5px 12px;border-bottom:1px solid #f1f5f9">
+                        ${p.quantity > 0
+                    ? `<span style="background:#dc2626;color:#fff;font-weight:700;padding:2px 12px;border-radius:3px;display:inline-block">${p.quantity}</span>`
+                    : '<span style="color:#9ca3af">0</span>'}
+                    </td>
+                </tr>`
+            ).join('');
+            return `
+                <tr>
+                    <td colspan="2" style="padding:12px 12px 4px;font-weight:700;color:#dc2626;font-size:0.95rem;border-top:10px solid #f8fafc">
+                        ${group.customer_name}
+                    </td>
+                </tr>
+                ${productRows}`;
+        }).join('');
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Wholesale — ${dateLabel}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+        h2 { text-align: center; background: #dc2626; color: white; padding: 10px; margin-bottom: 16px; font-size: 1rem; }
+        table { width: 100%; max-width: 480px; margin: 0 auto; border-collapse: collapse; font-size: 0.88rem; }
+        th { padding: 8px 12px; border-bottom: 2px solid #e5e7eb; text-align: left; font-weight: 600; }
+        th:last-child { text-align: center; width: 90px; }
+        @media print { body { margin: 8px; } }
+    </style>
+</head>
+<body>
+    <h2>Wholesale — ${dateLabel}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Restaurant / Order</th>
+                <th style="text-align:center">Quantity</th>
+            </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+
+        const w = window.open('', '_blank', 'width=600,height=800');
+        if (w) { w.document.write(html); w.document.close(); }
     }
 
     return (
@@ -448,7 +510,7 @@ export default function ReportsPage() {
                                     </thead>
                                     <tbody>
                                         {wholesaleData.map((group, gi) => (
-                                            <>
+                                            <Fragment key={gi}>
                                                 {/* Customer heading row */}
                                                 <tr key={`h-${gi}`}>
                                                     <td colSpan={2} style={{
@@ -482,7 +544,7 @@ export default function ReportsPage() {
                                                         </td>
                                                     </tr>
                                                 ))}
-                                            </>
+                                            </Fragment>
                                         ))}
                                     </tbody>
                                 </table>

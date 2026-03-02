@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getActiveProducts } from '@/actions/products';
+import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitWeeklyOrder, getLastWeeklyOrder } from '@/actions/orders';
 import { getAvailableMondays, canSubmitWeeklyOrder } from '@/lib/cutoff';
@@ -33,9 +34,10 @@ export default function WeeklyOrderPage() {
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts] = await Promise.all([
+                const [prods, setts, defaultProds] = await Promise.all([
                     getActiveProducts(),
                     getSettings(),
+                    getMyDefaultProducts(),
                 ]);
                 setProducts(prods);
                 setSettings(setts);
@@ -46,7 +48,7 @@ export default function WeeklyOrderPage() {
                 if (mondays.length > 0) {
                     const firstMonday = format(mondays[0], 'yyyy-MM-dd');
                     setSelectedMonday(firstMonday);
-                    initializeRows(prods, firstMonday);
+                    initializeRows(defaultProds, firstMonday);
                 }
             } catch (e) {
                 setError('Failed to load order data.');
@@ -58,7 +60,7 @@ export default function WeeklyOrderPage() {
 
     function initializeRows(prods: Product[], monday: string) {
         const dates = getDatesForWeek(monday);
-        const rows: OrderRow[] = prods.slice(0, 10).map((p) => ({
+        const rows: OrderRow[] = prods.map((p) => ({
             product_id: p.id,
             product_name: p.name,
             quantities: Object.fromEntries(dates.map((d) => [d, 0])),

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getActiveProducts } from '@/actions/products';
+import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitDailyOrder } from '@/actions/orders';
 import { canSubmitDailyOrder } from '@/lib/cutoff';
@@ -32,9 +33,10 @@ export default function DailyOrderPage() {
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts] = await Promise.all([
+                const [prods, setts, defaultProds] = await Promise.all([
                     getActiveProducts(),
                     getSettings(),
+                    getMyDefaultProducts(),
                 ]);
                 setProducts(prods);
                 setSettings(setts);
@@ -43,9 +45,9 @@ export default function DailyOrderPage() {
                 const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
                 setDeliveryDate(tomorrow);
 
-                // Initialize with first 10 products
+                // Initialize with customer's default products
                 setOrderRows(
-                    prods.slice(0, 10).map((p) => ({
+                    defaultProds.map((p) => ({
                         product_id: p.id,
                         product_name: p.name,
                         quantity: 0,

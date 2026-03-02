@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getOrders, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
+import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
 import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, CheckCircle } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
@@ -17,6 +17,8 @@ export default function OrdersPage() {
     const [customers, setCustomers] = useState<any[]>([]);
     const [overlaps, setOverlaps] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [overlapsLoading, setOverlapsLoading] = useState(true);
+    const [detailLoading, setDetailLoading] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
@@ -33,18 +35,25 @@ export default function OrdersPage() {
     useEffect(() => { loadData(); }, []);
 
     async function loadData() {
-        const [result, custs, ovs] = await Promise.all([
+        setLoading(true);
+        setOverlapsLoading(true);
+
+        // Phase 1: orders + customers — clears the full-screen spinner
+        const [result, custs] = await Promise.all([
             getOrders({ page: 1, pageSize: 50 }),
             getCustomers(),
-            getOverlaps(),
         ]);
         setOrders(result.data);
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(1);
         setCustomers(custs);
-        setOverlaps(ovs);
         setLoading(false);
+
+        // Phase 2: overlaps — updates in background without blocking the table
+        const ovs = await getOverlaps();
+        setOverlaps(ovs);
+        setOverlapsLoading(false);
     }
 
     async function loadMore() {
@@ -83,10 +92,14 @@ export default function OrdersPage() {
         }
     }
 
-    function openOrderDetail(order: any) {
-        setSelectedOrder(order);
+    async function openOrderDetail(orderId: string) {
+        setDetailLoading(true);
+        setSelectedOrder({});
         setIsEditing(false);
         setEditItems([]);
+        const order = await getOrderById(orderId);
+        setSelectedOrder(order);
+        setDetailLoading(false);
     }
 
     function startEditing() {
@@ -230,7 +243,12 @@ export default function OrdersPage() {
             </div>
 
             {/* Overlap Alert */}
-            {overlaps.length > 0 && (
+            {overlapsLoading && (
+                <div className="flex items-center gap-2 text-muted text-sm mb-4">
+                    <Loader2 size={14} className="animate-spin" /> Checking overlaps...
+                </div>
+            )}
+            {!overlapsLoading && overlaps.length > 0 && (
                 <div className="card mb-6 border-danger/30">
                     <div className="p-4" style={{ background: '#fef2f2' }}>
                         <div className="flex items-center gap-2 mb-3">
@@ -411,7 +429,7 @@ export default function OrdersPage() {
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-1">
-                                            <button onClick={() => openOrderDetail(order)} className="btn btn-ghost btn-sm" title="View / Edit">
+                                            <button onClick={() => openOrderDetail(order.id)} className="btn btn-ghost btn-sm" title="View / Edit">
                                                 <Eye size={14} />
                                             </button>
                                             {order.status !== 'confirmed' && (
@@ -451,6 +469,12 @@ export default function OrdersPage() {
             {selectedOrder && (
                 <div className="modal-backdrop">
                     <div className="modal-content" style={{ maxWidth: selectedOrder.order_type === 'weekly' ? '900px' : '650px' }}>
+                        {detailLoading && (
+                            <div className="flex items-center justify-center py-16">
+                                <Loader2 className="animate-spin text-primary" size={28} />
+                            </div>
+                        )}
+                        {!detailLoading && <>
                         {/* Header */}
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2">
@@ -642,6 +666,7 @@ export default function OrdersPage() {
                                 )}
                             </div>
                         </div>
+                        </>}
                     </div>
                 </div>
             )}

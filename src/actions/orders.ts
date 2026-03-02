@@ -228,7 +228,7 @@ export async function getOrders(filters?: {
 
     let query = supabase
         .from('orders')
-        .select('*, customer:users!customer_id(name, email), order_items(*, product:products(name))', { count: 'exact' })
+        .select('*, customer:users!customer_id(name, email), order_items(id, product_id, delivery_date, quantity)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, from + pageSize - 1);
 
@@ -377,10 +377,12 @@ export async function updateOrderItems(
 export async function getOverlaps() {
     const supabase = await createClient();
 
-    // Get all order items with order info
+    // Get order items from today onward (past overlaps are irrelevant for production)
+    const today = new Date().toISOString().split('T')[0];
     const { data: allItems, error } = await supabase
         .from('order_items')
         .select('*, order:orders(customer_id, order_type), product:products(name)')
+        .gte('delivery_date', today)
         .order('delivery_date');
 
     if (error) throw new Error(error.message);

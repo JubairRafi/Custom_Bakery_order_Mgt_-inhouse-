@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { Product } from '@/lib/types';
 
 export async function getUsers() {
     const supabase = await createClient();
@@ -99,6 +100,24 @@ export async function getCustomerDefaultProducts(customerId: string) {
 
     if (error) throw new Error(error.message);
     return data;
+}
+
+export async function getMyDefaultProducts(): Promise<Product[]> {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from('customer_default_products')
+        .select('product:products(*)')
+        .eq('customer_id', user.id);
+
+    if (error || !data) return [];
+
+    return data
+        .map((d: any) => d.product)
+        .filter((p: any) => p && p.active_status)
+        .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
 }
 
 export async function setCustomerDefaultProducts(customerId: string, productIds: string[]) {

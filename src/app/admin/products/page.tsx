@@ -46,15 +46,19 @@ export default function ProductsPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [tagFilter, setTagFilter] = useState('all');
 
     const filteredProducts = useMemo(() => {
         return products.filter((p) => {
             if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
             if (statusFilter === 'active' && !p.active_status) return false;
             if (statusFilter === 'inactive' && p.active_status) return false;
+            if (categoryFilter !== 'all' && p.category?.id !== categoryFilter) return false;
+            if (tagFilter !== 'all' && !p.tags?.some((t: any) => t.id === tagFilter)) return false;
             return true;
         });
-    }, [products, searchQuery, statusFilter]);
+    }, [products, searchQuery, statusFilter, categoryFilter, tagFilter]);
 
     useEffect(() => { loadData(); }, []);
 
@@ -316,12 +320,9 @@ export default function ProductsPage() {
     const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
 
     return (
-        <div className="animate-fade-in">
-            {/* ── Sticky header ────────────────────────────────────────── */}
-            <div
-                className="sticky top-0 z-10 bg-background"
-                style={{ margin: '-24px -24px 0', padding: '24px 24px 16px' }}
-            >
+        <div className="animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+            {/* ── Page header ──────────────────────────────────────────── */}
+            <div className="shrink-0 pb-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -353,6 +354,30 @@ export default function ProductsPage() {
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                         </select>
+                        {categories.length > 0 && (
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                className="form-input py-2 text-sm"
+                            >
+                                <option value="all">All Categories</option>
+                                {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {tags.length > 0 && (
+                            <select
+                                value={tagFilter}
+                                onChange={(e) => setTagFilter(e.target.value)}
+                                className="form-input py-2 text-sm"
+                            >
+                                <option value="all">All Tags</option>
+                                {tags.map((t) => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                        )}
                         <button onClick={() => { setShowCategoriesModal(true); setCatFormError(''); setEditingCategory(null); }} className="btn btn-outline btn-sm">
                             <FolderOpen size={15} /> Categories
                         </button>
@@ -375,9 +400,9 @@ export default function ProductsPage() {
                 </div>
             </div>
 
-            <div className="card overflow-x-auto mt-2">
+            <div className="card flex-1 overflow-auto min-h-0">
                 <table className="data-table">
-                    <thead>
+                    <thead className="sticky top-0 z-[5]">
                         <tr>
                             <th style={{ width: '40px' }}>
                                 <input

@@ -42,13 +42,49 @@ CREATE POLICY "Admins can update users"
   ON public.users FOR UPDATE
   USING (public.is_admin());
 
+-- ─── Product Categories ────────────────────────────────
+CREATE TABLE public.product_categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL UNIQUE,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.product_categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated can read categories"
+  ON public.product_categories FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins manage categories"
+  ON public.product_categories FOR ALL
+  USING (public.is_admin());
+
+-- ─── Tags ──────────────────────────────────────────────
+CREATE TABLE public.tags (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated can read tags"
+  ON public.tags FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins manage tags"
+  ON public.tags FOR ALL
+  USING (public.is_admin());
+
 -- ─── Products ──────────────────────────────────────────
 CREATE TABLE public.products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   active_status BOOLEAN DEFAULT true,
   display_order INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  category_id UUID REFERENCES public.product_categories(id) ON DELETE SET NULL
 );
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -59,6 +95,40 @@ CREATE POLICY "Anyone authenticated can read products"
 
 CREATE POLICY "Admins can manage products"
   ON public.products FOR ALL
+  USING (public.is_admin());
+
+-- ─── Product ↔ Tags ────────────────────────────────────
+CREATE TABLE public.product_tags (
+  product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+  tag_id UUID REFERENCES public.tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (product_id, tag_id)
+);
+
+ALTER TABLE public.product_tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated can read product_tags"
+  ON public.product_tags FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins manage product_tags"
+  ON public.product_tags FOR ALL
+  USING (public.is_admin());
+
+-- ─── Customer ↔ Tags ───────────────────────────────────
+CREATE TABLE public.customer_tags (
+  customer_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  tag_id UUID REFERENCES public.tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (customer_id, tag_id)
+);
+
+ALTER TABLE public.customer_tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Customers can view own tags"
+  ON public.customer_tags FOR SELECT
+  USING (auth.uid() = customer_id);
+
+CREATE POLICY "Admins manage customer_tags"
+  ON public.customer_tags FOR ALL
   USING (public.is_admin());
 
 -- ─── Customer Default Products ─────────────────────────

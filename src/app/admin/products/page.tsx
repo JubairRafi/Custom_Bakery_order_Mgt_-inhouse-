@@ -1,16 +1,55 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getProducts, createProduct, updateProduct, toggleProductStatus } from '@/actions/products';
-import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, GripVertical, Search } from 'lucide-react';
+import { getProducts, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkUpdateProducts, bulkDeleteProducts } from '@/actions/products';
+import { getCategories, createCategory, updateCategory, deleteCategory } from '@/actions/categories';
+import { getTags, createTag, deleteTag, getProductTags, setProductTags } from '@/actions/tags';
+import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, Search, Tag, FolderOpen, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function ProductsPage() {
     const [products, setProducts] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [tags, setTags] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Product modals
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState<any>(null);
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
+    const [selectedProductTags, setSelectedProductTags] = useState<string[]>([]);
+
+    // Manage-categories modal
+    const [showCategoriesModal, setShowCategoriesModal] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [editingCategory, setEditingCategory] = useState<any>(null);
+    const [catFormLoading, setCatFormLoading] = useState(false);
+    const [catFormError, setCatFormError] = useState('');
+
+    // Manage-tags modal
+    const [showTagsModal, setShowTagsModal] = useState(false);
+    const [newTagName, setNewTagName] = useState('');
+    const [tagFormLoading, setTagFormLoading] = useState(false);
+    const [tagFormError, setTagFormError] = useState('');
+
+    // Bulk modal
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [bulkTab, setBulkTab] = useState<'upload' | 'update'>('upload');
+    // Upload New
+    const [bulkRows, setBulkRows] = useState<{ name: string; category: string; active: string; tags: string }[]>([]);
+    const [bulkError, setBulkError] = useState('');
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkResult, setBulkResult] = useState<{ inserted: number; skipped: number } | null>(null);
+    // Update Existing
+    const [bulkUpdateRows, setBulkUpdateRows] = useState<{ name: string; category: string; active: string; tags: string }[]>([]);
+    const [bulkUpdateError, setBulkUpdateError] = useState('');
+    const [bulkUpdateResult, setBulkUpdateResult] = useState<{ updated: number; notFound: string[] } | null>(null);
+
+    // Multi-select delete
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [deleteLoading, setDeleteLoading] = useState(false);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
 
@@ -26,10 +65,14 @@ export default function ProductsPage() {
     useEffect(() => { loadData(); }, []);
 
     async function loadData() {
-        const prods = await getProducts();
+        const [prods, cats, tgs] = await Promise.all([getProducts(), getCategories(), getTags()]);
         setProducts(prods);
+        setCategories(cats);
+        setTags(tgs);
         setLoading(false);
     }
+
+    // ── Product create ─────────────────────────────────────────────────────
 
     async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -39,24 +82,44 @@ export default function ProductsPage() {
         const result = await createProduct(formData);
         if (result.error) {
             setFormError(result.error);
-        } else {
-            setShowCreateModal(false);
-            loadData();
+            setFormLoading(false);
+            return;
         }
+        if (result.id && selectedProductTags.length > 0) {
+            await setProductTags(result.id, selectedProductTags);
+        }
+        setShowCreateModal(false);
+        setSelectedProductTags([]);
+        loadData();
         setFormLoading(false);
+    }
+
+    // ── Product edit ───────────────────────────────────────────────────────
+
+    async function openEditModal(product: any) {
+        setShowEditModal(product);
+        setFormError('');
+        const tagIds = await getProductTags(product.id);
+        setSelectedProductTags(tagIds);
     }
 
     async function handleUpdate(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         setFormLoading(true);
+        setFormError('');
         const formData = new FormData(e.currentTarget);
-        const result = await updateProduct(showEditModal.id, formData);
-        if (result.error) {
-            setFormError(result.error);
-        } else {
-            setShowEditModal(null);
-            loadData();
+        const [updateResult] = await Promise.all([
+            updateProduct(showEditModal.id, formData),
+            setProductTags(showEditModal.id, selectedProductTags),
+        ]);
+        if (updateResult.error) {
+            setFormError(updateResult.error);
+            setFormLoading(false);
+            return;
         }
+        setShowEditModal(null);
+        setSelectedProductTags([]);
+        loadData();
         setFormLoading(false);
     }
 
@@ -65,6 +128,233 @@ export default function ProductsPage() {
         loadData();
     }
 
+    function toggleProductTag(tagId: string) {
+        setSelectedProductTags((prev) =>
+            prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+        );
+    }
+
+    // ── Multi-select delete ────────────────────────────────────────────────
+
+    function toggleSelect(id: string) {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+
+    function toggleSelectAll() {
+        if (filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id))) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredProducts.map((p) => p.id)));
+        }
+    }
+
+    async function handleDeleteSelected() {
+        if (!confirm(`Delete ${selectedIds.size} product(s)? This cannot be undone.`)) return;
+        setDeleteLoading(true);
+        await bulkDeleteProducts(Array.from(selectedIds));
+        setSelectedIds(new Set());
+        loadData();
+        setDeleteLoading(false);
+    }
+
+    // ── Category management ────────────────────────────────────────────────
+
+    async function handleCreateCategory(e: React.FormEvent) {
+        e.preventDefault();
+        setCatFormLoading(true);
+        setCatFormError('');
+        const fd = new FormData();
+        fd.set('name', newCategoryName);
+        const result = await createCategory(fd);
+        if (result.error) { setCatFormError(result.error); setCatFormLoading(false); return; }
+        setNewCategoryName('');
+        const cats = await getCategories();
+        setCategories(cats);
+        setCatFormLoading(false);
+    }
+
+    async function handleUpdateCategory(e: React.FormEvent) {
+        e.preventDefault();
+        setCatFormLoading(true);
+        setCatFormError('');
+        const fd = new FormData();
+        fd.set('name', editingCategory.name);
+        const result = await updateCategory(editingCategory.id, fd);
+        if (result.error) { setCatFormError(result.error); setCatFormLoading(false); return; }
+        setEditingCategory(null);
+        const cats = await getCategories();
+        setCategories(cats);
+        setCatFormLoading(false);
+    }
+
+    async function handleDeleteCategory(id: string) {
+        await deleteCategory(id);
+        const cats = await getCategories();
+        setCategories(cats);
+        loadData();
+    }
+
+    // ── Tag management ─────────────────────────────────────────────────────
+
+    async function handleCreateTag(e: React.FormEvent) {
+        e.preventDefault();
+        setTagFormLoading(true);
+        setTagFormError('');
+        const fd = new FormData();
+        fd.set('name', newTagName);
+        const result = await createTag(fd);
+        if (result.error) { setTagFormError(result.error); setTagFormLoading(false); return; }
+        setNewTagName('');
+        const tgs = await getTags();
+        setTags(tgs);
+        setTagFormLoading(false);
+    }
+
+    async function handleDeleteTag(id: string) {
+        await deleteTag(id);
+        const tgs = await getTags();
+        setTags(tgs);
+        loadData();
+    }
+
+    // ── Shared file parser ─────────────────────────────────────────────────
+
+    function parseProductsFile(
+        file: File,
+        onSuccess: (rows: { name: string; category: string; active: string; tags: string }[]) => void,
+        onError: (msg: string) => void
+    ) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const wb = XLSX.read(ev.target?.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                const rows = raw.slice(1)
+                    .filter((r) => String(r[0] ?? '').trim() && !String(r[0]).startsWith('──'))
+                    .map((r) => ({
+                        name:     String(r[0] ?? '').trim(),
+                        category: String(r[1] ?? '').trim(),
+                        active:   String(r[2] ?? 'Yes').trim(),
+                        tags:     String(r[3] ?? '').trim(),
+                    }));
+                if (rows.length === 0) {
+                    onError('No valid rows found. Make sure the file has product names in column A.');
+                    return;
+                }
+                onSuccess(rows);
+            } catch {
+                onError('Could not read file. Please use the provided .xlsx template.');
+            }
+        };
+        reader.readAsBinaryString(file);
+    }
+
+    // ── Bulk upload (new products) ─────────────────────────────────────────
+
+    function downloadTemplate() {
+        const tagNames = tags.map((t: any) => t.name).join(', ');
+        const catNames = categories.map((c: any) => c.name).join(', ');
+        const ws = XLSX.utils.aoa_to_sheet([
+            ['Name', 'Category', 'Active', 'Tags'],
+            ['Sourdough Baguette', 'Bread', 'Yes', 'Wholesale'],
+            ['Berry Danish', 'Pastry', 'Yes', 'Kings Road, St Martin'],
+            ['Cherry Tomatoes (punnet)', 'Fresh Veg', 'Yes', ''],
+            ['Chocolate Eclair', 'Dessert', 'Yes', 'Wholesale, Kings Road'],
+            ['Gluten-Free Roll', 'Bread', 'No', ''],
+            [],
+            ['── Reference ──────────────────────────────────────────────────────────'],
+            [`Available categories: ${catNames || 'none yet'}`],
+            [`Available tags (comma-separate multiple): ${tagNames || 'none yet'}`],
+        ]);
+        ws['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 10 }, { wch: 35 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Products');
+        XLSX.writeFile(wb, 'product_upload_template.xlsx');
+    }
+
+    function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setBulkError('');
+        setBulkResult(null);
+        const file = e.target.files?.[0];
+        if (!file) return;
+        parseProductsFile(file, setBulkRows, setBulkError);
+    }
+
+    async function handleBulkUpload() {
+        setBulkLoading(true);
+        setBulkError('');
+
+        const catMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
+        const tagMap = new Map(tags.map((t: any) => [t.name.toLowerCase(), t.id]));
+        const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
+
+        const toInsert = bulkRows
+            .filter((r) => !existingNames.has(r.name.toLowerCase()))
+            .map((r) => ({
+                name:          r.name,
+                category_id:   catMap.get(r.category.toLowerCase()) ?? null,
+                active_status: r.active.toLowerCase() !== 'no',
+                tag_ids: r.tags
+                    ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                          .map((name) => tagMap.get(name.toLowerCase()))
+                          .filter((id): id is string => Boolean(id))
+                    : [],
+            }));
+
+        const skipped = bulkRows.length - toInsert.length;
+        const result = await bulkCreateProducts(toInsert);
+        if (result.error) {
+            setBulkError(result.error);
+        } else {
+            setBulkResult({ inserted: result.inserted, skipped });
+            setBulkRows([]);
+            loadData();
+        }
+        setBulkLoading(false);
+    }
+
+    // ── Bulk update (existing products) ───────────────────────────────────
+
+    function handleUpdateFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setBulkUpdateError('');
+        setBulkUpdateResult(null);
+        const file = e.target.files?.[0];
+        if (!file) return;
+        parseProductsFile(file, setBulkUpdateRows, setBulkUpdateError);
+    }
+
+    async function handleBulkUpdate() {
+        setBulkLoading(true);
+        setBulkUpdateError('');
+
+        const catMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
+        const tagMap = new Map(tags.map((t: any) => [t.name.toLowerCase(), t.id]));
+
+        const toUpdate = bulkUpdateRows.map((r) => ({
+            name:          r.name,
+            category_id:   catMap.get(r.category.toLowerCase()) ?? null,
+            active_status: r.active.toLowerCase() !== 'no',
+            tag_ids: r.tags
+                ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                      .map((name) => tagMap.get(name.toLowerCase()))
+                      .filter((id): id is string => Boolean(id))
+                : [],
+        }));
+
+        const result = await bulkUpdateProducts(toUpdate);
+        setBulkUpdateResult(result);
+        setBulkUpdateRows([]);
+        loadData();
+        setBulkLoading(false);
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-24">
@@ -72,6 +362,8 @@ export default function ProductsPage() {
             </div>
         );
     }
+
+    const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
 
     return (
         <div className="animate-fade-in">
@@ -85,7 +377,7 @@ export default function ProductsPage() {
                         {products.filter((p) => p.active_status).length} active of {products.length} total
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                         <input
@@ -106,18 +398,44 @@ export default function ProductsPage() {
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
-                    <button onClick={() => { setShowCreateModal(true); setFormError(''); }} className="btn btn-primary btn-sm">
+                    <button onClick={() => { setShowCategoriesModal(true); setCatFormError(''); setEditingCategory(null); }} className="btn btn-outline btn-sm">
+                        <FolderOpen size={15} /> Categories
+                    </button>
+                    <button onClick={() => { setShowTagsModal(true); setTagFormError(''); }} className="btn btn-outline btn-sm">
+                        <Tag size={15} /> Tags
+                    </button>
+                    <button onClick={() => { setShowBulkModal(true); setBulkRows([]); setBulkError(''); setBulkResult(null); setBulkTab('upload'); setBulkUpdateRows([]); setBulkUpdateError(''); setBulkUpdateResult(null); }} className="btn btn-outline btn-sm">
+                        <Upload size={15} /> Bulk
+                    </button>
+                    {selectedIds.size > 0 && (
+                        <button onClick={handleDeleteSelected} disabled={deleteLoading} className="btn btn-sm bg-red-600 text-white hover:bg-red-700">
+                            {deleteLoading ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                            Delete ({selectedIds.size})
+                        </button>
+                    )}
+                    <button onClick={() => { setShowCreateModal(true); setFormError(''); setSelectedProductTags([]); }} className="btn btn-primary btn-sm">
                         <Plus size={16} /> Add Product
                     </button>
                 </div>
             </div>
 
-            <div className="card">
+            <div className="card overflow-x-auto">
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '60px' }}>Order</th>
+                            <th style={{ width: '40px' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={allFilteredSelected}
+                                    onChange={toggleSelectAll}
+                                    className="w-4 h-4 rounded"
+                                    title="Select all"
+                                />
+                            </th>
+                            <th style={{ width: '50px' }}>#</th>
                             <th>Name</th>
+                            <th>Category</th>
+                            <th>Tags</th>
                             <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -125,9 +443,28 @@ export default function ProductsPage() {
                     </thead>
                     <tbody>
                         {filteredProducts.map((p, index) => (
-                            <tr key={p.id} className={!p.active_status ? 'opacity-50' : ''}>
+                            <tr key={p.id} className={`${!p.active_status ? 'opacity-50' : ''} ${selectedIds.has(p.id) ? 'bg-blue-50' : ''}`}>
+                                <td>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(p.id)}
+                                        onChange={() => toggleSelect(p.id)}
+                                        className="w-4 h-4 rounded"
+                                    />
+                                </td>
                                 <td className="text-center text-muted font-mono text-sm">{index + 1}</td>
                                 <td className="font-bold">{p.name}</td>
+                                <td className="text-sm text-muted">{p.category?.name ?? '—'}</td>
+                                <td>
+                                    {p.tags && p.tags.length > 0
+                                        ? <div className="flex flex-wrap gap-1">
+                                            {p.tags.map((t: any) => (
+                                                <span key={t.id} className="badge badge-info text-xs">{t.name}</span>
+                                            ))}
+                                          </div>
+                                        : <span className="text-muted text-sm">—</span>
+                                    }
+                                </td>
                                 <td>
                                     <span className={`badge ${p.active_status ? 'badge-success' : 'badge-danger'}`}>
                                         {p.active_status ? 'Active' : 'Inactive'}
@@ -136,7 +473,7 @@ export default function ProductsPage() {
                                 <td className="text-muted text-sm">{new Date(p.created_at).toLocaleDateString()}</td>
                                 <td>
                                     <div className="flex items-center gap-1">
-                                        <button onClick={() => { setShowEditModal(p); setFormError(''); }} className="btn btn-ghost btn-sm" title="Edit">
+                                        <button onClick={() => openEditModal(p)} className="btn btn-ghost btn-sm" title="Edit">
                                             <Edit size={14} />
                                         </button>
                                         <button
@@ -157,10 +494,10 @@ export default function ProductsPage() {
                 )}
             </div>
 
-            {/* Create Modal */}
+            {/* ── Create Product Modal ─────────────────────────────────── */}
             {showCreateModal && (
                 <div className="modal-backdrop">
-                    <div className="modal-content" style={{ maxWidth: '420px' }}>
+                    <div className="modal-content" style={{ maxWidth: '460px' }}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold">Add Product</h3>
                             <button onClick={() => setShowCreateModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
@@ -171,6 +508,33 @@ export default function ProductsPage() {
                                 <label className="form-label">Product Name</label>
                                 <input name="name" required className="form-input" placeholder="e.g. White Bread Loaf" />
                             </div>
+                            <div className="form-group">
+                                <label className="form-label">Category</label>
+                                <select name="category_id" className="form-input">
+                                    <option value="">— No category —</option>
+                                    {categories.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {tags.length > 0 && (
+                                <div className="form-group">
+                                    <label className="form-label">Tags</label>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {tags.map((t) => (
+                                            <label key={t.id} className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedProductTags.includes(t.id)}
+                                                    onChange={() => toggleProductTag(t.id)}
+                                                    className="w-4 h-4 rounded"
+                                                />
+                                                <span className="text-sm">{t.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-ghost">Cancel</button>
                                 <button type="submit" disabled={formLoading} className="btn btn-primary">
@@ -182,10 +546,10 @@ export default function ProductsPage() {
                 </div>
             )}
 
-            {/* Edit Modal */}
+            {/* ── Edit Product Modal ───────────────────────────────────── */}
             {showEditModal && (
                 <div className="modal-backdrop">
-                    <div className="modal-content" style={{ maxWidth: '420px' }}>
+                    <div className="modal-content" style={{ maxWidth: '460px' }}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold">Edit Product</h3>
                             <button onClick={() => setShowEditModal(null)} className="text-muted hover:text-foreground"><X size={20} /></button>
@@ -196,6 +560,33 @@ export default function ProductsPage() {
                                 <label className="form-label">Product Name</label>
                                 <input name="name" required className="form-input" defaultValue={showEditModal.name} />
                             </div>
+                            <div className="form-group">
+                                <label className="form-label">Category</label>
+                                <select name="category_id" className="form-input" defaultValue={showEditModal.category_id ?? ''}>
+                                    <option value="">— No category —</option>
+                                    {categories.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {tags.length > 0 && (
+                                <div className="form-group">
+                                    <label className="form-label">Tags</label>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {tags.map((t) => (
+                                            <label key={t.id} className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedProductTags.includes(t.id)}
+                                                    onChange={() => toggleProductTag(t.id)}
+                                                    className="w-4 h-4 rounded"
+                                                />
+                                                <span className="text-sm">{t.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div className="form-group">
                                 <label className="form-label">Status</label>
                                 <select name="active_status" className="form-input" defaultValue={String(showEditModal.active_status)}>
@@ -210,6 +601,387 @@ export default function ProductsPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Manage Categories Modal ──────────────────────────────── */}
+            {showCategoriesModal && (
+                <div className="modal-backdrop">
+                    <div className="modal-content" style={{ maxWidth: '440px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><FolderOpen size={18} /> Manage Categories</h3>
+                            <button onClick={() => setShowCategoriesModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
+                        </div>
+                        {catFormError && <div className="mb-3 p-2 rounded-lg badge-danger text-sm">{catFormError}</div>}
+
+                        <form onSubmit={handleCreateCategory} className="flex gap-2 mb-4">
+                            <input
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                placeholder="New category name"
+                                required
+                                className="form-input flex-1 text-sm py-2"
+                            />
+                            <button type="submit" disabled={catFormLoading} className="btn btn-primary btn-sm">
+                                {catFormLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add
+                            </button>
+                        </form>
+
+                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                            {categories.length === 0 && <p className="text-muted text-sm text-center py-4">No categories yet.</p>}
+                            {categories.map((c) => (
+                                <div key={c.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                                    {editingCategory?.id === c.id ? (
+                                        <form onSubmit={handleUpdateCategory} className="flex items-center gap-2 flex-1">
+                                            <input
+                                                value={editingCategory.name}
+                                                onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                                                className="form-input flex-1 text-sm py-1"
+                                                autoFocus
+                                            />
+                                            <button type="submit" disabled={catFormLoading} className="btn btn-primary btn-sm">
+                                                <Check size={13} />
+                                            </button>
+                                            <button type="button" onClick={() => setEditingCategory(null)} className="btn btn-ghost btn-sm">
+                                                <X size={13} />
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <>
+                                            <span className="flex-1 text-sm font-medium">{c.name}</span>
+                                            <button onClick={() => setEditingCategory(c)} className="btn btn-ghost btn-sm" title="Rename">
+                                                <Edit size={13} />
+                                            </button>
+                                            <button onClick={() => handleDeleteCategory(c.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end mt-4">
+                            <button onClick={() => setShowCategoriesModal(false)} className="btn btn-ghost">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Manage Tags Modal ────────────────────────────────────── */}
+            {showTagsModal && (
+                <div className="modal-backdrop">
+                    <div className="modal-content" style={{ maxWidth: '440px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Tag size={18} /> Manage Tags</h3>
+                            <button onClick={() => setShowTagsModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
+                        </div>
+                        {tagFormError && <div className="mb-3 p-2 rounded-lg badge-danger text-sm">{tagFormError}</div>}
+
+                        <form onSubmit={handleCreateTag} className="flex gap-2 mb-4">
+                            <input
+                                value={newTagName}
+                                onChange={(e) => setNewTagName(e.target.value)}
+                                placeholder="New tag name"
+                                required
+                                className="form-input flex-1 text-sm py-2"
+                            />
+                            <button type="submit" disabled={tagFormLoading} className="btn btn-primary btn-sm">
+                                {tagFormLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add
+                            </button>
+                        </form>
+
+                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                            {tags.length === 0 && <p className="text-muted text-sm text-center py-4">No tags yet.</p>}
+                            {tags.map((t) => (
+                                <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                                    <span className="flex-1 text-sm font-medium">
+                                        <span className="badge badge-info">{t.name}</span>
+                                    </span>
+                                    <button onClick={() => handleDeleteTag(t.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
+                                        <Trash2 size={13} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-xs text-muted mt-3">Deleting a tag removes it from all products and customers.</p>
+                        <div className="flex justify-end mt-4">
+                            <button onClick={() => setShowTagsModal(false)} className="btn btn-ghost">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Bulk Modal (Upload New + Update Existing) ────────────── */}
+            {showBulkModal && (
+                <div className="modal-backdrop">
+                    <div className="modal-content" style={{ maxWidth: '700px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Upload size={18} /> Bulk Products</h3>
+                            <button onClick={() => setShowBulkModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b mb-5">
+                            <button
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${bulkTab === 'upload' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'}`}
+                                onClick={() => setBulkTab('upload')}
+                            >
+                                Upload New
+                            </button>
+                            <button
+                                className={`px-4 py-2 text-sm font-medium transition-colors ${bulkTab === 'update' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'}`}
+                                onClick={() => setBulkTab('update')}
+                            >
+                                Update Existing
+                            </button>
+                        </div>
+
+                        {/* ── Upload New tab ── */}
+                        {bulkTab === 'upload' && (
+                            <>
+                                <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-medium">1. Download the template</p>
+                                        <p className="text-xs text-muted mt-0.5">Fill in: <strong>Name</strong> (required), <strong>Category</strong>, <strong>Active</strong> (Yes/No), <strong>Tags</strong> (comma-separated)</p>
+                                    </div>
+                                    <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
+                                        <Download size={14} /> Template
+                                    </button>
+                                </div>
+
+                                <div className="mb-4">
+                                    <p className="text-sm font-medium mb-2">2. Upload your filled file (.xlsx or .xls)</p>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        onChange={handleFileChange}
+                                        className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:bg-white hover:file:bg-gray-50 cursor-pointer"
+                                    />
+                                </div>
+
+                                {bulkError && (
+                                    <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {bulkError}
+                                    </div>
+                                )}
+
+                                {bulkResult && (
+                                    <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm font-medium">
+                                        ✓ Added {bulkResult.inserted} product{bulkResult.inserted !== 1 ? 's' : ''}.
+                                        {bulkResult.skipped > 0 && ` ${bulkResult.skipped} skipped (already exist).`}
+                                    </div>
+                                )}
+
+                                {bulkRows.length > 0 && !bulkResult && (() => {
+                                    const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
+                                    const dupeCount = bulkRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
+                                    return (
+                                        <>
+                                            <p className="text-sm font-medium mb-1">3. Review &amp; confirm ({bulkRows.length} rows)</p>
+                                            {dupeCount > 0 && (
+                                                <div className="flex items-center gap-2 mb-2 text-amber-700 bg-amber-50 rounded-lg px-3 py-2 text-xs">
+                                                    <AlertCircle size={14} className="shrink-0" />
+                                                    {dupeCount} row{dupeCount !== 1 ? 's' : ''} already exist and will be skipped.
+                                                </div>
+                                            )}
+                                            <div className="border rounded-lg overflow-hidden mb-4">
+                                                <div className="max-h-56 overflow-y-auto">
+                                                    <table className="data-table text-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Name</th>
+                                                                <th>Category</th>
+                                                                <th>Tags</th>
+                                                                <th>Active</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {bulkRows.map((r, i) => {
+                                                                const isDuplicate = existingNames.has(r.name.toLowerCase());
+                                                                const catMatched = !r.category || categories.some(
+                                                                    (c) => c.name.toLowerCase() === r.category.toLowerCase()
+                                                                );
+                                                                const tagNames = r.tags
+                                                                    ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                                                                    : [];
+                                                                return (
+                                                                    <tr key={i} className={isDuplicate ? 'bg-amber-50' : ''}>
+                                                                        <td className="text-muted">{i + 1}</td>
+                                                                        <td className={isDuplicate ? 'text-amber-600 font-medium' : 'font-medium'}>
+                                                                            {r.name}
+                                                                            {isDuplicate && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">exists ⚠</span>}
+                                                                        </td>
+                                                                        <td>
+                                                                            {r.category
+                                                                                ? catMatched
+                                                                                    ? <span>{r.category}</span>
+                                                                                    : <span className="text-orange-500">{r.category} ⚠</span>
+                                                                                : <span className="text-muted">—</span>
+                                                                            }
+                                                                        </td>
+                                                                        <td>
+                                                                            {tagNames.length > 0 ? (
+                                                                                <div className="flex flex-wrap gap-1">
+                                                                                    {tagNames.map((name) => {
+                                                                                        const ok = tags.some((t: any) => t.name.toLowerCase() === name.toLowerCase());
+                                                                                        return (
+                                                                                            <span key={name} className={`text-xs px-1.5 py-0.5 rounded ${ok ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-600'}`}>
+                                                                                                {name}{!ok && ' ⚠'}
+                                                                                            </span>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            ) : <span className="text-muted">—</span>}
+                                                                        </td>
+                                                                        <td>{r.active.toLowerCase() === 'no'
+                                                                            ? <span className="badge badge-danger">Inactive</span>
+                                                                            : <span className="badge badge-success">Active</span>}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+
+                                <div className="flex gap-3 justify-end">
+                                    <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
+                                    {bulkRows.length > 0 && !bulkResult && (
+                                        <button onClick={handleBulkUpload} disabled={bulkLoading} className="btn btn-primary">
+                                            {bulkLoading
+                                                ? <><Loader2 size={15} className="animate-spin" /> Uploading...</>
+                                                : <><Upload size={15} /> Upload {bulkRows.filter((r) => !products.some((p) => p.name.toLowerCase() === r.name.toLowerCase())).length} Products</>
+                                            }
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* ── Update Existing tab ── */}
+                        {bulkTab === 'update' && (
+                            <>
+                                <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-medium">1. Download the template</p>
+                                        <p className="text-xs text-muted mt-0.5">Products are matched by <strong>Name</strong> (exact, case-insensitive). Category, Tags, and Active will be updated.</p>
+                                    </div>
+                                    <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
+                                        <Download size={14} /> Template
+                                    </button>
+                                </div>
+
+                                <div className="mb-4">
+                                    <p className="text-sm font-medium mb-2">2. Upload your filled file (.xlsx or .xls)</p>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        onChange={handleUpdateFileChange}
+                                        className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:bg-white hover:file:bg-gray-50 cursor-pointer"
+                                    />
+                                </div>
+
+                                {bulkUpdateError && (
+                                    <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {bulkUpdateError}
+                                    </div>
+                                )}
+
+                                {bulkUpdateResult && (
+                                    <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+                                        <p className="font-medium">✓ Updated {bulkUpdateResult.updated} product{bulkUpdateResult.updated !== 1 ? 's' : ''}.</p>
+                                        {bulkUpdateResult.notFound.length > 0 && (
+                                            <p className="mt-1 text-amber-700">Not found: {bulkUpdateResult.notFound.join(', ')}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {bulkUpdateRows.length > 0 && !bulkUpdateResult && (() => {
+                                    const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
+                                    const foundCount = bulkUpdateRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
+                                    return (
+                                        <>
+                                            <p className="text-sm font-medium mb-2">3. Review &amp; confirm ({bulkUpdateRows.length} rows)</p>
+                                            <div className="border rounded-lg overflow-hidden mb-4">
+                                                <div className="max-h-56 overflow-y-auto">
+                                                    <table className="data-table text-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Name</th>
+                                                                <th>Category</th>
+                                                                <th>Tags</th>
+                                                                <th>Active</th>
+                                                                <th>Status</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {bulkUpdateRows.map((r, i) => {
+                                                                const found = existingNames.has(r.name.toLowerCase());
+                                                                const tagNames = r.tags
+                                                                    ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                                                                    : [];
+                                                                return (
+                                                                    <tr key={i} className={!found ? 'opacity-60' : ''}>
+                                                                        <td className="text-muted">{i + 1}</td>
+                                                                        <td className="font-medium">{r.name}</td>
+                                                                        <td className="text-sm text-muted">{r.category || '—'}</td>
+                                                                        <td>
+                                                                            {tagNames.length > 0 ? (
+                                                                                <div className="flex flex-wrap gap-1">
+                                                                                    {tagNames.map((name) => (
+                                                                                        <span key={name} className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">{name}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : <span className="text-muted">—</span>}
+                                                                        </td>
+                                                                        <td>{r.active.toLowerCase() === 'no'
+                                                                            ? <span className="badge badge-danger">Inactive</span>
+                                                                            : <span className="badge badge-success">Active</span>}
+                                                                        </td>
+                                                                        <td>
+                                                                            {found
+                                                                                ? <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">Found</span>
+                                                                                : <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">Not found</span>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            {foundCount === 0 && (
+                                                <p className="text-sm text-muted text-center mb-3">No matching products found. Check that names match exactly.</p>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+
+                                <div className="flex gap-3 justify-end">
+                                    <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
+                                    {bulkUpdateRows.length > 0 && !bulkUpdateResult && (() => {
+                                        const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
+                                        const foundCount = bulkUpdateRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
+                                        return foundCount > 0 ? (
+                                            <button onClick={handleBulkUpdate} disabled={bulkLoading} className="btn btn-primary">
+                                                {bulkLoading
+                                                    ? <><Loader2 size={15} className="animate-spin" /> Updating...</>
+                                                    : <><Check size={15} /> Update {foundCount} Products</>
+                                                }
+                                            </button>
+                                        ) : null;
+                                    })()}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

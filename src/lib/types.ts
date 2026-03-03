@@ -12,12 +12,28 @@ export interface User {
     created_at: string;
 }
 
+export interface Category {
+    id: string;
+    name: string;
+    display_order: number;
+    created_at: string;
+}
+
+export interface Tag {
+    id: string;
+    name: string;
+    created_at: string;
+}
+
 export interface Product {
     id: string;
     name: string;
     active_status: boolean;
     display_order: number;
     created_at: string;
+    category_id?: string | null;
+    category?: { id: string; name: string } | null;
+    tags?: { id: string; name: string }[];
 }
 
 export interface CustomerDefaultProduct {

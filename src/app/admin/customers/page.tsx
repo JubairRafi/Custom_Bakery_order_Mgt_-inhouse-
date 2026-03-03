@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react';
 import { getCustomers, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts } from '@/actions/users';
 import { getProducts } from '@/actions/products';
-import { Users, Plus, Edit, Ban, KeyRound, Package, Loader2, X, Check, Search } from 'lucide-react';
+import { getTags, getCustomerTags, setCustomerTags } from '@/actions/tags';
+import { Users, Plus, Edit, Ban, KeyRound, Package, Loader2, X, Check, Search, Tag } from 'lucide-react';
 
 export default function CustomersPage() {
     const [customers, setCustomers] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
+    const [allTags, setAllTags] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -15,6 +17,7 @@ export default function CustomersPage() {
     const [showResetModal, setShowResetModal] = useState<any>(null);
     const [showDefaultsModal, setShowDefaultsModal] = useState<any>(null);
     const [selectedDefaults, setSelectedDefaults] = useState<string[]>([]);
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [formError, setFormError] = useState('');
     const [formLoading, setFormLoading] = useState(false);
 
@@ -23,9 +26,10 @@ export default function CustomersPage() {
     }, []);
 
     async function loadData() {
-        const [custs, prods] = await Promise.all([getCustomers(), getProducts()]);
+        const [custs, prods, tgs] = await Promise.all([getCustomers(), getProducts(), getTags()]);
         setCustomers(custs);
         setProducts(prods.filter((p: any) => p.active_status));
+        setAllTags(tgs);
         setLoading(false);
     }
 
@@ -82,14 +86,21 @@ export default function CustomersPage() {
     async function openDefaultsModal(customer: any) {
         setShowDefaultsModal(customer);
         setFormLoading(true);
-        const defaults = await getCustomerDefaultProducts(customer.id);
+        const [defaults, tagIds] = await Promise.all([
+            getCustomerDefaultProducts(customer.id),
+            getCustomerTags(customer.id),
+        ]);
         setSelectedDefaults(defaults.map((d: any) => d.product_id));
+        setSelectedTags(tagIds);
         setFormLoading(false);
     }
 
     async function handleSaveDefaults() {
         setFormLoading(true);
-        await setCustomerDefaultProducts(showDefaultsModal.id, selectedDefaults);
+        await Promise.all([
+            setCustomerDefaultProducts(showDefaultsModal.id, selectedDefaults),
+            setCustomerTags(showDefaultsModal.id, selectedTags),
+        ]);
         setShowDefaultsModal(null);
         setFormLoading(false);
     }
@@ -97,6 +108,12 @@ export default function CustomersPage() {
     function toggleDefault(productId: string) {
         setSelectedDefaults((prev) =>
             prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+        );
+    }
+
+    function toggleTag(tagId: string) {
+        setSelectedTags((prev) =>
+            prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
         );
     }
 
@@ -295,9 +312,11 @@ export default function CustomersPage() {
                             <div className="py-8 text-center"><Loader2 className="animate-spin text-primary mx-auto" size={24} /></div>
                         ) : (
                             <>
-                                <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
+                                {/* Default products */}
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Default Products</p>
+                                <div className="space-y-1 max-h-48 overflow-y-auto mb-1 border rounded-lg p-2">
                                     {products.map((p: any) => (
-                                        <label key={p.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                        <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                                             <input
                                                 type="checkbox"
                                                 checked={selectedDefaults.includes(p.id)}
@@ -309,10 +328,38 @@ export default function CustomersPage() {
                                     ))}
                                 </div>
                                 <p className="text-xs text-muted mb-4">{selectedDefaults.length} product(s) selected</p>
-                                <div className="flex gap-3 justify-end">
+
+                                {/* Customer tags */}
+                                {allTags.length > 0 && (
+                                    <>
+                                        <div className="border-t pt-4 mb-2">
+                                            <p className="text-xs font-semibold text-muted uppercase tracking-wide flex items-center gap-1 mb-1">
+                                                <Tag size={12} /> Customer Tags
+                                            </p>
+                                            <p className="text-xs text-muted mb-3">
+                                                Tags control which products this customer can add to orders. If none selected, they see all products.
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {allTags.map((t: any) => (
+                                                    <label key={t.id} className="flex items-center gap-1.5 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedTags.includes(t.id)}
+                                                            onChange={() => toggleTag(t.id)}
+                                                            className="w-4 h-4 rounded"
+                                                        />
+                                                        <span className="text-sm">{t.name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                <div className="flex gap-3 justify-end mt-4">
                                     <button onClick={() => setShowDefaultsModal(null)} className="btn btn-ghost">Cancel</button>
                                     <button onClick={handleSaveDefaults} className="btn btn-primary">
-                                        <Check size={16} /> Save Defaults
+                                        <Check size={16} /> Save
                                     </button>
                                 </div>
                             </>

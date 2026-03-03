@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getActiveProducts } from '@/actions/products';
+import { getActiveProductsForCustomer } from '@/actions/tags';
 import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitWeeklyOrder, getLastWeeklyOrder } from '@/actions/orders';
@@ -35,7 +35,7 @@ export default function WeeklyOrderPage() {
         async function loadData() {
             try {
                 const [prods, setts, defaultProds] = await Promise.all([
-                    getActiveProducts(),
+                    getActiveProductsForCustomer(),
                     getSettings(),
                     getMyDefaultProducts(),
                 ]);

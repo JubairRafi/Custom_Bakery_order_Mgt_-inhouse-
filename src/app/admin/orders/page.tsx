@@ -60,7 +60,10 @@ export default function OrdersPage() {
         setLoadingMore(true);
         const nextPage = page + 1;
         const result = await getOrders({ page: nextPage, pageSize: 50 });
-        setOrders((prev) => [...prev, ...result.data]);
+        setOrders((prev) => {
+            const existingIds = new Set(prev.map((o: any) => o.id));
+            return [...prev, ...result.data.filter((o: any) => !existingIds.has(o.id))];
+        });
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(nextPage);

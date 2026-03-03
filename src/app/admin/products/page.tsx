@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getProducts, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkUpdateProducts, bulkDeleteProducts } from '@/actions/products';
+import { getProducts, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkDeleteProducts } from '@/actions/products';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '@/actions/categories';
 import { getTags, createTag, deleteTag, getProductTags, setProductTags } from '@/actions/tags';
 import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, Search, Tag, FolderOpen, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
@@ -33,18 +33,12 @@ export default function ProductsPage() {
     const [tagFormLoading, setTagFormLoading] = useState(false);
     const [tagFormError, setTagFormError] = useState('');
 
-    // Bulk modal
+    // Bulk upload modal
     const [showBulkModal, setShowBulkModal] = useState(false);
-    const [bulkTab, setBulkTab] = useState<'upload' | 'update'>('upload');
-    // Upload New
     const [bulkRows, setBulkRows] = useState<{ name: string; category: string; active: string; tags: string }[]>([]);
     const [bulkError, setBulkError] = useState('');
     const [bulkLoading, setBulkLoading] = useState(false);
     const [bulkResult, setBulkResult] = useState<{ inserted: number; skipped: number } | null>(null);
-    // Update Existing
-    const [bulkUpdateRows, setBulkUpdateRows] = useState<{ name: string; category: string; active: string; tags: string }[]>([]);
-    const [bulkUpdateError, setBulkUpdateError] = useState('');
-    const [bulkUpdateResult, setBulkUpdateResult] = useState<{ updated: number; notFound: string[] } | null>(null);
 
     // Multi-select delete
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -221,40 +215,7 @@ export default function ProductsPage() {
         loadData();
     }
 
-    // ── Shared file parser ─────────────────────────────────────────────────
-
-    function parseProductsFile(
-        file: File,
-        onSuccess: (rows: { name: string; category: string; active: string; tags: string }[]) => void,
-        onError: (msg: string) => void
-    ) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const wb = XLSX.read(ev.target?.result, { type: 'binary' });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-                const rows = raw.slice(1)
-                    .filter((r) => String(r[0] ?? '').trim() && !String(r[0]).startsWith('──'))
-                    .map((r) => ({
-                        name:     String(r[0] ?? '').trim(),
-                        category: String(r[1] ?? '').trim(),
-                        active:   String(r[2] ?? 'Yes').trim(),
-                        tags:     String(r[3] ?? '').trim(),
-                    }));
-                if (rows.length === 0) {
-                    onError('No valid rows found. Make sure the file has product names in column A.');
-                    return;
-                }
-                onSuccess(rows);
-            } catch {
-                onError('Could not read file. Please use the provided .xlsx template.');
-            }
-        };
-        reader.readAsBinaryString(file);
-    }
-
-    // ── Bulk upload (new products) ─────────────────────────────────────────
+    // ── Bulk upload ────────────────────────────────────────────────────────
 
     function downloadTemplate() {
         const tagNames = tags.map((t: any) => t.name).join(', ');
@@ -282,7 +243,31 @@ export default function ProductsPage() {
         setBulkResult(null);
         const file = e.target.files?.[0];
         if (!file) return;
-        parseProductsFile(file, setBulkRows, setBulkError);
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const wb = XLSX.read(ev.target?.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                const rows = raw.slice(1)
+                    .filter((r) => String(r[0] ?? '').trim() && !String(r[0]).startsWith('──'))
+                    .map((r) => ({
+                        name:     String(r[0] ?? '').trim(),
+                        category: String(r[1] ?? '').trim(),
+                        active:   String(r[2] ?? 'Yes').trim(),
+                        tags:     String(r[3] ?? '').trim(),
+                    }));
+                if (rows.length === 0) {
+                    setBulkError('No valid rows found. Make sure the file has product names in column A.');
+                    return;
+                }
+                setBulkRows(rows);
+            } catch {
+                setBulkError('Could not read file. Please use the provided .xlsx template.');
+            }
+        };
+        reader.readAsBinaryString(file);
     }
 
     async function handleBulkUpload() {
@@ -318,41 +303,6 @@ export default function ProductsPage() {
         setBulkLoading(false);
     }
 
-    // ── Bulk update (existing products) ───────────────────────────────────
-
-    function handleUpdateFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-        setBulkUpdateError('');
-        setBulkUpdateResult(null);
-        const file = e.target.files?.[0];
-        if (!file) return;
-        parseProductsFile(file, setBulkUpdateRows, setBulkUpdateError);
-    }
-
-    async function handleBulkUpdate() {
-        setBulkLoading(true);
-        setBulkUpdateError('');
-
-        const catMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
-        const tagMap = new Map(tags.map((t: any) => [t.name.toLowerCase(), t.id]));
-
-        const toUpdate = bulkUpdateRows.map((r) => ({
-            name:          r.name,
-            category_id:   catMap.get(r.category.toLowerCase()) ?? null,
-            active_status: r.active.toLowerCase() !== 'no',
-            tag_ids: r.tags
-                ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
-                      .map((name) => tagMap.get(name.toLowerCase()))
-                      .filter((id): id is string => Boolean(id))
-                : [],
-        }));
-
-        const result = await bulkUpdateProducts(toUpdate);
-        setBulkUpdateResult(result);
-        setBulkUpdateRows([]);
-        loadData();
-        setBulkLoading(false);
-    }
-
     // ── Render ─────────────────────────────────────────────────────────────
 
     if (loading) {
@@ -367,59 +317,65 @@ export default function ProductsPage() {
 
     return (
         <div className="animate-fade-in">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                        <Package size={24} className="text-primary" />
-                        Product Management
-                    </h1>
-                    <p className="text-muted text-sm mt-1">
-                        {products.filter((p) => p.active_status).length} active of {products.length} total
-                    </p>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                        <input
-                            type="text"
-                            placeholder="Search products..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="form-input pl-9 py-2 text-sm"
-                            style={{ minWidth: '220px' }}
-                        />
+            {/* ── Sticky header ────────────────────────────────────────── */}
+            <div
+                className="sticky top-0 z-10 bg-background"
+                style={{ margin: '-24px -24px 0', padding: '24px 24px 16px' }}
+            >
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                            <Package size={24} className="text-primary" />
+                            Product Management
+                        </h1>
+                        <p className="text-muted text-sm mt-1">
+                            {products.filter((p) => p.active_status).length} active of {products.length} total
+                        </p>
                     </div>
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="form-input py-2 text-sm"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                    <button onClick={() => { setShowCategoriesModal(true); setCatFormError(''); setEditingCategory(null); }} className="btn btn-outline btn-sm">
-                        <FolderOpen size={15} /> Categories
-                    </button>
-                    <button onClick={() => { setShowTagsModal(true); setTagFormError(''); }} className="btn btn-outline btn-sm">
-                        <Tag size={15} /> Tags
-                    </button>
-                    <button onClick={() => { setShowBulkModal(true); setBulkRows([]); setBulkError(''); setBulkResult(null); setBulkTab('upload'); setBulkUpdateRows([]); setBulkUpdateError(''); setBulkUpdateResult(null); }} className="btn btn-outline btn-sm">
-                        <Upload size={15} /> Bulk
-                    </button>
-                    {selectedIds.size > 0 && (
-                        <button onClick={handleDeleteSelected} disabled={deleteLoading} className="btn btn-sm bg-red-600 text-white hover:bg-red-700">
-                            {deleteLoading ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                            Delete ({selectedIds.size})
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className="relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                            <input
+                                type="text"
+                                placeholder="Search products..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="form-input pl-9 py-2 text-sm"
+                                style={{ minWidth: '220px' }}
+                            />
+                        </div>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="form-input py-2 text-sm"
+                        >
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        <button onClick={() => { setShowCategoriesModal(true); setCatFormError(''); setEditingCategory(null); }} className="btn btn-outline btn-sm">
+                            <FolderOpen size={15} /> Categories
                         </button>
-                    )}
-                    <button onClick={() => { setShowCreateModal(true); setFormError(''); setSelectedProductTags([]); }} className="btn btn-primary btn-sm">
-                        <Plus size={16} /> Add Product
-                    </button>
+                        <button onClick={() => { setShowTagsModal(true); setTagFormError(''); }} className="btn btn-outline btn-sm">
+                            <Tag size={15} /> Tags
+                        </button>
+                        <button onClick={() => { setShowBulkModal(true); setBulkRows([]); setBulkError(''); setBulkResult(null); }} className="btn btn-outline btn-sm">
+                            <Upload size={15} /> Bulk Upload
+                        </button>
+                        {selectedIds.size > 0 && (
+                            <button onClick={handleDeleteSelected} disabled={deleteLoading} className="btn btn-sm bg-red-600 text-white hover:bg-red-700">
+                                {deleteLoading ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                                Delete ({selectedIds.size})
+                            </button>
+                        )}
+                        <button onClick={() => { setShowCreateModal(true); setFormError(''); setSelectedProductTags([]); }} className="btn btn-primary btn-sm">
+                            <Plus size={16} /> Add Product
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="card overflow-x-auto">
+            <div className="card overflow-x-auto mt-2">
                 <table className="data-table">
                     <thead>
                         <tr>
@@ -712,275 +668,141 @@ export default function ProductsPage() {
                 </div>
             )}
 
-            {/* ── Bulk Modal (Upload New + Update Existing) ────────────── */}
+            {/* ── Bulk Upload Modal ────────────────────────────────────── */}
             {showBulkModal && (
                 <div className="modal-backdrop">
-                    <div className="modal-content" style={{ maxWidth: '700px' }}>
+                    <div className="modal-content" style={{ maxWidth: '680px' }}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold flex items-center gap-2"><Upload size={18} /> Bulk Products</h3>
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Upload size={18} /> Bulk Upload Products</h3>
                             <button onClick={() => setShowBulkModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
                         </div>
 
-                        {/* Tabs */}
-                        <div className="flex border-b mb-5">
-                            <button
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${bulkTab === 'upload' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'}`}
-                                onClick={() => setBulkTab('upload')}
-                            >
-                                Upload New
-                            </button>
-                            <button
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${bulkTab === 'update' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'}`}
-                                onClick={() => setBulkTab('update')}
-                            >
-                                Update Existing
+                        <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
+                            <div>
+                                <p className="text-sm font-medium">1. Download the template</p>
+                                <p className="text-xs text-muted mt-0.5">Fill in: <strong>Name</strong> (required), <strong>Category</strong>, <strong>Active</strong> (Yes/No), <strong>Tags</strong> (comma-separated, must match exactly)</p>
+                            </div>
+                            <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
+                                <Download size={14} /> Template
                             </button>
                         </div>
 
-                        {/* ── Upload New tab ── */}
-                        {bulkTab === 'upload' && (
-                            <>
-                                <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
-                                    <div>
-                                        <p className="text-sm font-medium">1. Download the template</p>
-                                        <p className="text-xs text-muted mt-0.5">Fill in: <strong>Name</strong> (required), <strong>Category</strong>, <strong>Active</strong> (Yes/No), <strong>Tags</strong> (comma-separated)</p>
-                                    </div>
-                                    <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
-                                        <Download size={14} /> Template
-                                    </button>
-                                </div>
+                        <div className="mb-4">
+                            <p className="text-sm font-medium mb-2">2. Upload your filled file (.xlsx or .xls)</p>
+                            <input
+                                type="file"
+                                accept=".xlsx,.xls"
+                                onChange={handleFileChange}
+                                className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:bg-white hover:file:bg-gray-50 cursor-pointer"
+                            />
+                        </div>
 
-                                <div className="mb-4">
-                                    <p className="text-sm font-medium mb-2">2. Upload your filled file (.xlsx or .xls)</p>
-                                    <input
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        onChange={handleFileChange}
-                                        className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:bg-white hover:file:bg-gray-50 cursor-pointer"
-                                    />
-                                </div>
-
-                                {bulkError && (
-                                    <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {bulkError}
-                                    </div>
-                                )}
-
-                                {bulkResult && (
-                                    <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm font-medium">
-                                        ✓ Added {bulkResult.inserted} product{bulkResult.inserted !== 1 ? 's' : ''}.
-                                        {bulkResult.skipped > 0 && ` ${bulkResult.skipped} skipped (already exist).`}
-                                    </div>
-                                )}
-
-                                {bulkRows.length > 0 && !bulkResult && (() => {
-                                    const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
-                                    const dupeCount = bulkRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
-                                    return (
-                                        <>
-                                            <p className="text-sm font-medium mb-1">3. Review &amp; confirm ({bulkRows.length} rows)</p>
-                                            {dupeCount > 0 && (
-                                                <div className="flex items-center gap-2 mb-2 text-amber-700 bg-amber-50 rounded-lg px-3 py-2 text-xs">
-                                                    <AlertCircle size={14} className="shrink-0" />
-                                                    {dupeCount} row{dupeCount !== 1 ? 's' : ''} already exist and will be skipped.
-                                                </div>
-                                            )}
-                                            <div className="border rounded-lg overflow-hidden mb-4">
-                                                <div className="max-h-56 overflow-y-auto">
-                                                    <table className="data-table text-sm">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>#</th>
-                                                                <th>Name</th>
-                                                                <th>Category</th>
-                                                                <th>Tags</th>
-                                                                <th>Active</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {bulkRows.map((r, i) => {
-                                                                const isDuplicate = existingNames.has(r.name.toLowerCase());
-                                                                const catMatched = !r.category || categories.some(
-                                                                    (c) => c.name.toLowerCase() === r.category.toLowerCase()
-                                                                );
-                                                                const tagNames = r.tags
-                                                                    ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
-                                                                    : [];
-                                                                return (
-                                                                    <tr key={i} className={isDuplicate ? 'bg-amber-50' : ''}>
-                                                                        <td className="text-muted">{i + 1}</td>
-                                                                        <td className={isDuplicate ? 'text-amber-600 font-medium' : 'font-medium'}>
-                                                                            {r.name}
-                                                                            {isDuplicate && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">exists ⚠</span>}
-                                                                        </td>
-                                                                        <td>
-                                                                            {r.category
-                                                                                ? catMatched
-                                                                                    ? <span>{r.category}</span>
-                                                                                    : <span className="text-orange-500">{r.category} ⚠</span>
-                                                                                : <span className="text-muted">—</span>
-                                                                            }
-                                                                        </td>
-                                                                        <td>
-                                                                            {tagNames.length > 0 ? (
-                                                                                <div className="flex flex-wrap gap-1">
-                                                                                    {tagNames.map((name) => {
-                                                                                        const ok = tags.some((t: any) => t.name.toLowerCase() === name.toLowerCase());
-                                                                                        return (
-                                                                                            <span key={name} className={`text-xs px-1.5 py-0.5 rounded ${ok ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-600'}`}>
-                                                                                                {name}{!ok && ' ⚠'}
-                                                                                            </span>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            ) : <span className="text-muted">—</span>}
-                                                                        </td>
-                                                                        <td>{r.active.toLowerCase() === 'no'
-                                                                            ? <span className="badge badge-danger">Inactive</span>
-                                                                            : <span className="badge badge-success">Active</span>}
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-
-                                <div className="flex gap-3 justify-end">
-                                    <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
-                                    {bulkRows.length > 0 && !bulkResult && (
-                                        <button onClick={handleBulkUpload} disabled={bulkLoading} className="btn btn-primary">
-                                            {bulkLoading
-                                                ? <><Loader2 size={15} className="animate-spin" /> Uploading...</>
-                                                : <><Upload size={15} /> Upload {bulkRows.filter((r) => !products.some((p) => p.name.toLowerCase() === r.name.toLowerCase())).length} Products</>
-                                            }
-                                        </button>
-                                    )}
-                                </div>
-                            </>
+                        {bulkError && (
+                            <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                                <AlertCircle size={16} className="mt-0.5 shrink-0" /> {bulkError}
+                            </div>
                         )}
 
-                        {/* ── Update Existing tab ── */}
-                        {bulkTab === 'update' && (
-                            <>
-                                <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
-                                    <div>
-                                        <p className="text-sm font-medium">1. Download the template</p>
-                                        <p className="text-xs text-muted mt-0.5">Products are matched by <strong>Name</strong> (exact, case-insensitive). Category, Tags, and Active will be updated.</p>
-                                    </div>
-                                    <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
-                                        <Download size={14} /> Template
-                                    </button>
-                                </div>
+                        {bulkResult && (
+                            <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm font-medium">
+                                ✓ Added {bulkResult.inserted} product{bulkResult.inserted !== 1 ? 's' : ''}.
+                                {bulkResult.skipped > 0 && ` ${bulkResult.skipped} skipped (already exist).`}
+                            </div>
+                        )}
 
-                                <div className="mb-4">
-                                    <p className="text-sm font-medium mb-2">2. Upload your filled file (.xlsx or .xls)</p>
-                                    <input
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        onChange={handleUpdateFileChange}
-                                        className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:bg-white hover:file:bg-gray-50 cursor-pointer"
-                                    />
-                                </div>
-
-                                {bulkUpdateError && (
-                                    <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {bulkUpdateError}
-                                    </div>
-                                )}
-
-                                {bulkUpdateResult && (
-                                    <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-                                        <p className="font-medium">✓ Updated {bulkUpdateResult.updated} product{bulkUpdateResult.updated !== 1 ? 's' : ''}.</p>
-                                        {bulkUpdateResult.notFound.length > 0 && (
-                                            <p className="mt-1 text-amber-700">Not found: {bulkUpdateResult.notFound.join(', ')}</p>
-                                        )}
-                                    </div>
-                                )}
-
-                                {bulkUpdateRows.length > 0 && !bulkUpdateResult && (() => {
-                                    const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
-                                    const foundCount = bulkUpdateRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
-                                    return (
-                                        <>
-                                            <p className="text-sm font-medium mb-2">3. Review &amp; confirm ({bulkUpdateRows.length} rows)</p>
-                                            <div className="border rounded-lg overflow-hidden mb-4">
-                                                <div className="max-h-56 overflow-y-auto">
-                                                    <table className="data-table text-sm">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>#</th>
-                                                                <th>Name</th>
-                                                                <th>Category</th>
-                                                                <th>Tags</th>
-                                                                <th>Active</th>
-                                                                <th>Status</th>
+                        {bulkRows.length > 0 && !bulkResult && (() => {
+                            const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
+                            const dupeCount = bulkRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
+                            const newCount = bulkRows.length - dupeCount;
+                            return (
+                                <>
+                                    <p className="text-sm font-medium mb-1">3. Review &amp; confirm ({bulkRows.length} rows)</p>
+                                    {dupeCount > 0 && (
+                                        <div className="flex items-center gap-2 mb-2 text-amber-700 bg-amber-50 rounded-lg px-3 py-2 text-xs">
+                                            <AlertCircle size={14} className="shrink-0" />
+                                            {dupeCount} row{dupeCount !== 1 ? 's' : ''} already exist and will be skipped.
+                                        </div>
+                                    )}
+                                    <div className="border rounded-lg overflow-hidden mb-4">
+                                        <div className="max-h-56 overflow-y-auto">
+                                            <table className="data-table text-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Name</th>
+                                                        <th>Category</th>
+                                                        <th>Tags</th>
+                                                        <th>Active</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {bulkRows.map((r, i) => {
+                                                        const isDuplicate = existingNames.has(r.name.toLowerCase());
+                                                        const catMatched = !r.category || categories.some(
+                                                            (c) => c.name.toLowerCase() === r.category.toLowerCase()
+                                                        );
+                                                        const tagNames = r.tags
+                                                            ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                                                            : [];
+                                                        return (
+                                                            <tr key={i} className={isDuplicate ? 'bg-amber-50' : ''}>
+                                                                <td className="text-muted">{i + 1}</td>
+                                                                <td className={isDuplicate ? 'text-amber-600 font-medium' : 'font-medium'}>
+                                                                    {r.name}
+                                                                    {isDuplicate && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">exists ⚠</span>}
+                                                                </td>
+                                                                <td>
+                                                                    {r.category
+                                                                        ? catMatched
+                                                                            ? <span>{r.category}</span>
+                                                                            : <span className="text-orange-500">{r.category} ⚠</span>
+                                                                        : <span className="text-muted">—</span>
+                                                                    }
+                                                                </td>
+                                                                <td>
+                                                                    {tagNames.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {tagNames.map((name) => {
+                                                                                const ok = tags.some((t: any) => t.name.toLowerCase() === name.toLowerCase());
+                                                                                return (
+                                                                                    <span key={name} className={`text-xs px-1.5 py-0.5 rounded ${ok ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-600'}`}>
+                                                                                        {name}{!ok && ' ⚠'}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ) : <span className="text-muted">—</span>}
+                                                                </td>
+                                                                <td>{r.active.toLowerCase() === 'no'
+                                                                    ? <span className="badge badge-danger">Inactive</span>
+                                                                    : <span className="badge badge-success">Active</span>}
+                                                                </td>
                                                             </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {bulkUpdateRows.map((r, i) => {
-                                                                const found = existingNames.has(r.name.toLowerCase());
-                                                                const tagNames = r.tags
-                                                                    ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
-                                                                    : [];
-                                                                return (
-                                                                    <tr key={i} className={!found ? 'opacity-60' : ''}>
-                                                                        <td className="text-muted">{i + 1}</td>
-                                                                        <td className="font-medium">{r.name}</td>
-                                                                        <td className="text-sm text-muted">{r.category || '—'}</td>
-                                                                        <td>
-                                                                            {tagNames.length > 0 ? (
-                                                                                <div className="flex flex-wrap gap-1">
-                                                                                    {tagNames.map((name) => (
-                                                                                        <span key={name} className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">{name}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : <span className="text-muted">—</span>}
-                                                                        </td>
-                                                                        <td>{r.active.toLowerCase() === 'no'
-                                                                            ? <span className="badge badge-danger">Inactive</span>
-                                                                            : <span className="badge badge-success">Active</span>}
-                                                                        </td>
-                                                                        <td>
-                                                                            {found
-                                                                                ? <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">Found</span>
-                                                                                : <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">Not found</span>
-                                                                            }
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                            {foundCount === 0 && (
-                                                <p className="text-sm text-muted text-center mb-3">No matching products found. Check that names match exactly.</p>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-
-                                <div className="flex gap-3 justify-end">
-                                    <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
-                                    {bulkUpdateRows.length > 0 && !bulkUpdateResult && (() => {
-                                        const existingNames = new Set(products.map((p) => p.name.toLowerCase()));
-                                        const foundCount = bulkUpdateRows.filter((r) => existingNames.has(r.name.toLowerCase())).length;
-                                        return foundCount > 0 ? (
-                                            <button onClick={handleBulkUpdate} disabled={bulkLoading} className="btn btn-primary">
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 justify-end">
+                                        <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
+                                        {newCount > 0 && (
+                                            <button onClick={handleBulkUpload} disabled={bulkLoading} className="btn btn-primary">
                                                 {bulkLoading
-                                                    ? <><Loader2 size={15} className="animate-spin" /> Updating...</>
-                                                    : <><Check size={15} /> Update {foundCount} Products</>
+                                                    ? <><Loader2 size={15} className="animate-spin" /> Uploading...</>
+                                                    : <><Upload size={15} /> Upload {newCount} Products</>
                                                 }
                                             </button>
-                                        ) : null;
-                                    })()}
-                                </div>
-                            </>
+                                        )}
+                                    </div>
+                                </>
+                            );
+                        })()}
+
+                        {(!bulkRows.length || bulkResult) && (
+                            <div className="flex justify-end">
+                                <button onClick={() => setShowBulkModal(false)} className="btn btn-ghost">Close</button>
+                            </div>
                         )}
                     </div>
                 </div>

@@ -129,43 +129,6 @@ export async function bulkCreateProducts(
     return { inserted: data?.length ?? 0 };
 }
 
-export async function bulkUpdateProducts(
-    rows: { name: string; category_id: string | null; active_status: boolean; tag_ids: string[] }[]
-) {
-    const supabase = await createClient();
-    if (rows.length === 0) return { updated: 0, notFound: [] as string[] };
-
-    const { data: existing } = await supabase.from('products').select('id, name');
-    const nameToId = new Map((existing ?? []).map((p: any) => [p.name.toLowerCase(), p.id]));
-
-    const notFound: string[] = [];
-    const productUpdates: PromiseLike<any>[] = [];
-    const tagDeletes: PromiseLike<any>[] = [];
-    const tagInserts: { product_id: string; tag_id: string }[] = [];
-
-    for (const row of rows) {
-        const id = nameToId.get(row.name.toLowerCase());
-        if (!id) { notFound.push(row.name); continue; }
-        productUpdates.push(
-            supabase.from('products').update({
-                category_id: row.category_id,
-                active_status: row.active_status,
-            }).eq('id', id)
-        );
-        tagDeletes.push(supabase.from('product_tags').delete().eq('product_id', id));
-        for (const tag_id of row.tag_ids) {
-            tagInserts.push({ product_id: id, tag_id });
-        }
-    }
-
-    await Promise.all([...productUpdates, ...tagDeletes]);
-    if (tagInserts.length > 0) {
-        await supabase.from('product_tags').insert(tagInserts);
-    }
-
-    return { updated: productUpdates.length, notFound };
-}
-
 export async function bulkDeleteProducts(ids: string[]) {
     const supabase = await createClient();
     if (ids.length === 0) return { deleted: 0 };

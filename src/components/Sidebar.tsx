@@ -72,7 +72,7 @@ export default function Sidebar({ links, userName, userRole }: SidebarProps) {
                 {/* Navigation */}
                 <nav className="flex-1 py-4 overflow-y-auto">
                     <p className="px-5 mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-sidebar-text opacity-30">
-                        Navigation
+                        
                     </p>
                     {links.map((link) => {
                         const isActive = pathname === link.href;

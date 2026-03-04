@@ -273,17 +273,6 @@ export async function deleteOrder(orderId: string) {
     return { success: true };
 }
 
-export async function confirmOrder(orderId: string) {
-    const supabase = await createClient();
-    const { error } = await supabase
-        .from('orders')
-        .update({ status: 'confirmed' })
-        .eq('id', orderId);
-
-    if (error) return { error: error.message };
-    return { success: true };
-}
-
 export async function updateOrderStatus(orderId: string, status: string) {
     const supabase = await createClient();
     const { error } = await supabase

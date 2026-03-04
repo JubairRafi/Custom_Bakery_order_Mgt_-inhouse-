@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
+import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, CheckCircle } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -85,14 +85,6 @@ export default function OrdersPage() {
         await resolveOverlap(ov.customer_id, ov.product_id, ov.delivery_date, keep);
         setResolvingKey(null);
         loadData();
-    }
-
-    async function handleConfirm(orderId: string) {
-        await confirmOrder(orderId);
-        loadData();
-        if (selectedOrder?.id === orderId) {
-            setSelectedOrder((prev: any) => prev ? { ...prev, status: 'confirmed' } : null);
-        }
     }
 
     async function openOrderDetail(orderId: string) {
@@ -367,7 +359,6 @@ export default function OrdersPage() {
                     >
                         <option value="">All Status</option>
                         <option value="submitted">Submitted</option>
-                        <option value="confirmed">Confirmed</option>
                     </select>
                     {(filterCustomer || filterType || filterStatus || showOverlapsOnly || searchQuery) && (
                         <button
@@ -407,11 +398,7 @@ export default function OrdersPage() {
                                         )}
                                     </td>
                                     <td>
-                                        {order.status === 'confirmed' ? (
-                                            <span className="badge badge-success">✓ Confirmed</span>
-                                        ) : (
-                                            <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
-                                        )}
+                                        <span className="badge badge-success">Submitted</span>
                                     </td>
                                     <td>
                                         <span className={`badge ${order.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>
@@ -435,11 +422,6 @@ export default function OrdersPage() {
                                             <button onClick={() => openOrderDetail(order.id)} className="btn btn-ghost btn-sm" title="View / Edit">
                                                 <Eye size={14} />
                                             </button>
-                                            {order.status !== 'confirmed' && (
-                                                <button onClick={() => handleConfirm(order.id)} className="btn btn-ghost btn-sm text-success" title="Confirm Order">
-                                                    <CheckCircle size={14} />
-                                                </button>
-                                            )}
                                             <button onClick={() => handleDelete(order.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
                                                 <Trash2 size={14} />
                                             </button>
@@ -659,14 +641,6 @@ export default function OrdersPage() {
                                 <span className="text-sm text-muted">
                                     ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
                                 </span>
-                                {selectedOrder.status !== 'confirmed' && (
-                                    <button
-                                        onClick={() => handleConfirm(selectedOrder.id)}
-                                        className="btn btn-success btn-sm"
-                                    >
-                                        <CheckCircle size={14} /> Confirm Order
-                                    </button>
-                                )}
                             </div>
                         </div>
                         </>}

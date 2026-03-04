@@ -102,11 +102,7 @@ export default async function CustomerDashboard() {
                                         {new Date(order.created_at).toLocaleDateString()}
                                     </td>
                                     <td>
-                                        {order.status === 'confirmed' ? (
-                                            <span className="badge badge-success">✓ Confirmed</span>
-                                        ) : (
-                                            <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
-                                        )}
+                                        <span className="badge badge-success">Submitted</span>
                                     </td>
                                 </tr>
                             ))}

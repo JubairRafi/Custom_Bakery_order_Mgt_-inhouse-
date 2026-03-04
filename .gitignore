@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase
+supabase/.temp/
+supabase/functions/.env
+
+# windows
+Thumbs.db
+Desktop.ini
+
+# ide
+.vscode/
+.idea/
+
+# claude code (local personal settings)
+.claude/

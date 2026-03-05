@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { login } from '@/actions/auth';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { Loader2, Mail, Lock } from 'lucide-react';
 
 export default function LoginPage() {
@@ -19,8 +20,8 @@ export default function LoginPage() {
                 setError(result.error);
             }
             // On success, login() calls redirect() and the component unmounts
-        } catch {
-            // Unexpected error — show a message and let the user retry
+        } catch (err) {
+            if (isRedirectError(err)) return;
             setError('Something went wrong. Please try again.');
         } finally {
             setLoading(false);

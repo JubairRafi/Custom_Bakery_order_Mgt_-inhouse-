@@ -23,7 +23,7 @@ export default function OrdersPage() {
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterStatus, setFilterStatus] = useState('');
+
     const [showOverlapsOnly, setShowOverlapsOnly] = useState(false);
     const [resolvingKey, setResolvingKey] = useState<string | null>(null);
 
@@ -197,7 +197,7 @@ export default function OrdersPage() {
         return orders.filter((o) => {
             if (filterCustomer && o.customer_id !== filterCustomer) return false;
             if (filterType && o.order_type !== filterType) return false;
-            if (filterStatus && o.status !== filterStatus) return false;
+
             if (showOverlapsOnly && !isOverlapping(o)) return false;
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
@@ -209,7 +209,7 @@ export default function OrdersPage() {
             }
             return true;
         });
-    }, [orders, filterCustomer, filterType, filterStatus, showOverlapsOnly, searchQuery, overlapKeySet]);
+    }, [orders, filterCustomer, filterType, showOverlapsOnly, searchQuery, overlapKeySet]);
 
     if (loading) {
         return (
@@ -361,18 +361,9 @@ export default function OrdersPage() {
                         <option value="weekly">Weekly</option>
                         <option value="daily">Daily</option>
                     </select>
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="form-input py-2 text-sm"
-                        style={{ minWidth: '140px' }}
-                    >
-                        <option value="">All Status</option>
-                        <option value="submitted">Submitted</option>
-                    </select>
-                    {(filterCustomer || filterType || filterStatus || showOverlapsOnly || searchQuery) && (
+                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery) && (
                         <button
-                            onClick={() => { setFilterCustomer(''); setFilterType(''); setFilterStatus(''); setShowOverlapsOnly(false); setSearchQuery(''); }}
+                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchQuery(''); }}
                             className="btn btn-ghost btn-sm"
                         >
                             <X size={14} /> Clear
@@ -388,7 +379,6 @@ export default function OrdersPage() {
                         <tr>
                             <th>Customer</th>
                             <th>Type</th>
-                            <th>Status</th>
                             <th>Date</th>
                             <th>Items</th>
                             <th>Total Qty</th>
@@ -406,9 +396,6 @@ export default function OrdersPage() {
                                         {hasOverlap && (
                                             <span className="badge badge-danger ml-2 text-xs">OVERLAP</span>
                                         )}
-                                    </td>
-                                    <td>
-                                        <span className="badge badge-success">Submitted</span>
                                     </td>
                                     <td>
                                         <span className={`badge ${order.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>
@@ -521,16 +508,6 @@ export default function OrdersPage() {
                             <div>
                                 <span className="text-muted text-xs">Submitted</span>
                                 <p className="font-bold">{format(new Date(selectedOrder.created_at), 'MMM dd, HH:mm')}</p>
-                            </div>
-                            <div>
-                                <span className="text-muted text-xs">Status</span>
-                                <p>
-                                    {selectedOrder.status === 'confirmed' ? (
-                                        <span className="badge badge-success">✓ Confirmed</span>
-                                    ) : (
-                                        <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
-                                    )}
-                                </p>
                             </div>
                         </div>
 

@@ -99,6 +99,15 @@ export default function OrdersPage() {
         setDetailLoading(false);
     }
 
+    function isOrderPast(order: any): boolean {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (order.order_type === 'weekly') {
+            return addDays(parseISO(order.week_start_date), 6) < today;
+        }
+        return parseISO(order.delivery_date) < today;
+    }
+
     function startEditing() {
         if (!selectedOrder) return;
         // Clone items for editing
@@ -467,11 +476,11 @@ export default function OrdersPage() {
                                 )}
                             </h3>
                             <div className="flex items-center gap-2">
-                                {!isEditing ? (
+                                {!isEditing && !isOrderPast(selectedOrder) ? (
                                     <button onClick={startEditing} className="btn btn-primary btn-sm">
                                         <Edit size={14} /> Edit
                                     </button>
-                                ) : (
+                                ) : isEditing ? (
                                     <>
                                         <button onClick={() => setIsEditing(false)} className="btn btn-ghost btn-sm">
                                             Cancel
@@ -480,7 +489,7 @@ export default function OrdersPage() {
                                             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
                                         </button>
                                     </>
-                                )}
+                                ) : null}
                                 <button onClick={() => { setSelectedOrder(null); setIsEditing(false); }} className="text-muted hover:text-foreground ml-1">
                                     <X size={20} />
                                 </button>

@@ -52,6 +52,15 @@ export default function OrderHistoryPage() {
         setViewLoading(null);
     }
 
+    function isOrderPast(order: any): boolean {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (order.order_type === 'weekly') {
+            return addDays(parseISO(order.week_start_date), 6) < today;
+        }
+        return parseISO(order.delivery_date) < today;
+    }
+
     // Build weekly grid for display
     function buildWeeklyGrid(order: any) {
         if (order.order_type !== 'weekly' || !order.week_start_date) return null;
@@ -164,16 +173,18 @@ export default function OrderHistoryPage() {
                                             : <Eye size={14} />}
                                         {selectedOrder?.id === order.id ? 'Hide' : 'View'}
                                     </button>
-                                    <a
-                                        href={
-                                            order.order_type === 'weekly'
-                                                ? `/dashboard/weekly-order?week=${order.week_start_date}`
-                                                : `/dashboard/daily-order?date=${order.delivery_date}`
-                                        }
-                                        className="btn btn-outline btn-sm"
-                                    >
-                                        <Pencil size={14} /> Edit
-                                    </a>
+                                    {!isOrderPast(order) && (
+                                        <a
+                                            href={
+                                                order.order_type === 'weekly'
+                                                    ? `/dashboard/weekly-order?week=${order.week_start_date}`
+                                                    : `/dashboard/daily-order?date=${order.delivery_date}`
+                                            }
+                                            className="btn btn-outline btn-sm"
+                                        >
+                                            <Pencil size={14} /> Edit
+                                        </a>
+                                    )}
                                 </div>
                             </div>
 

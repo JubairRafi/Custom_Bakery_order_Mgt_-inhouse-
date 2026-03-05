@@ -250,7 +250,12 @@ export default function DailyOrderPage() {
             </div>
 
             {/* Product List */}
-            {(canSubmit || existingOrderId) && (
+            {(() => {
+                const anyUnlocked = deliveryDate && settings
+                    ? products.some(p => !isProductDayLocked(parseISO(deliveryDate), p, settings))
+                    : canSubmit;
+                const allProductsLocked = orderRows.length > 0 && orderRows.every(row => isRowLocked(row.product_id));
+                return (existingOrderId || anyUnlocked) && (
                 <>
                     <div className="card mb-6">
                         <div className="p-4 border-b border-border">
@@ -348,22 +353,23 @@ export default function DailyOrderPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm text-muted">
                             <Info size={14} />
-                            {existingOrderId && !canSubmit
-                                ? 'This date is past its cutoff — order cannot be modified.'
+                            {existingOrderId && allProductsLocked
+                                ? 'All products for this date are past their cutoff and cannot be modified.'
                                 : existingOrderId
-                                ? 'Saving will replace your existing order for this date.'
-                                : 'Orders are locked after the cutoff time.'}
+                                ? 'Locked products cannot be changed; others are still editable.'
+                                : 'Products past their cutoff are locked.'}
                         </div>
                         <button
                             onClick={() => setShowConfirmModal(true)}
-                            disabled={!hasAnyQuantity() || (!!existingOrderId && !canSubmit)}
+                            disabled={!hasAnyQuantity() || (!!existingOrderId && allProductsLocked)}
                             className="btn btn-success"
                         >
                             <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit'}
                         </button>
                     </div>
                 </>
-            )}
+                );
+            })()}
 
             {/* Confirm Modal */}
             {showConfirmModal && (

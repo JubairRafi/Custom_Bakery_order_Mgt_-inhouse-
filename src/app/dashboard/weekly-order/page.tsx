@@ -519,8 +519,10 @@ export default function WeeklyOrderPage() {
 
                     {/* Submit Button */}
                     {(() => {
-                        const allDaysLocked = selectedMonday
-                            ? getDatesForWeek(selectedMonday).every(isDayLocked)
+                        const allDaysLocked = selectedMonday && orderRows.length > 0
+                            ? getDatesForWeek(selectedMonday).every(date =>
+                                orderRows.every(row => isRowDayLocked(date, row))
+                              )
                             : false;
                         return (
                             <div className="flex items-center justify-between">

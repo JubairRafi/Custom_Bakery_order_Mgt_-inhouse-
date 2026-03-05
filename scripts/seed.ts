@@ -13,7 +13,7 @@ import { format, addDays, addWeeks, subMonths, startOfWeek } from 'date-fns';
 // ─── Config ────────────────────────────────────────────────────────────────
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
     console.error('Missing env vars: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -23,7 +23,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const MONTHS_BACK = parseInt(process.env.MONTHS ?? '6');
-const BATCH_SIZE  = 400; // safe limit per Supabase insert call
+const BATCH_SIZE = 400; // safe limit per Supabase insert call
 
 /** Status value written to seeded orders so we can delete them cleanly */
 const SEED_STATUS = 'seeded';
@@ -100,11 +100,12 @@ async function seedData() {
 
     const today = new Date();
     const startDate = startOfWeek(subMonths(today, MONTHS_BACK), { weekStartsOn: 1 });
+    const endDate = addWeeks(today, 2);
 
     // Build list of all Mondays in the date range
     const mondays: string[] = [];
     let cur = startDate;
-    while (cur < today) {
+    while (cur < endDate) {
         mondays.push(format(cur, 'yyyy-MM-dd'));
         cur = addWeeks(cur, 1);
     }
@@ -112,7 +113,7 @@ async function seedData() {
     // Build list of all business days (Mon–Fri) in the date range
     const businessDays: string[] = [];
     let day = startDate;
-    while (day < today) {
+    while (day < endDate) {
         const dow = day.getDay(); // 0=Sun, 6=Sat
         if (dow >= 1 && dow <= 5) {
             businessDays.push(format(day, 'yyyy-MM-dd'));
@@ -120,11 +121,11 @@ async function seedData() {
         day = addDays(day, 1);
     }
 
-    console.log(`Date range: ${format(startDate, 'yyyy-MM-dd')} → ${format(today, 'yyyy-MM-dd')}`);
+    console.log(`Date range: ${format(startDate, 'yyyy-MM-dd')} → ${format(endDate, 'yyyy-MM-dd')}`);
     console.log(`Weeks: ${mondays.length} | Business days: ${businessDays.length}\n`);
 
     const allOrders: Record<string, unknown>[] = [];
-    const allItems:  Record<string, unknown>[] = [];
+    const allItems: Record<string, unknown>[] = [];
 
     // 2. Generate orders per customer
     for (const customer of customers) {

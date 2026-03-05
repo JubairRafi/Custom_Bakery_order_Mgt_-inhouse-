@@ -82,6 +82,25 @@ export function canSubmitDailyOrder(
 }
 
 /**
+ * Check if a specific delivery date is locked for a given product.
+ * If the product has cutoff_hours set, uses that (N hours before midnight of delivery date).
+ * Otherwise falls back to the global daily cutoff from settings.
+ */
+export function isProductDayLocked(
+    deliveryDate: Date,
+    product: { cutoff_hours?: number | null },
+    settings: Settings,
+    now: Date = new Date()
+): boolean {
+    if (product.cutoff_hours != null) {
+        const cutoff = startOfDay(deliveryDate);
+        cutoff.setHours(cutoff.getHours() - product.cutoff_hours);
+        return now >= cutoff;
+    }
+    return !canSubmitDailyOrder(deliveryDate, settings, now).allowed;
+}
+
+/**
  * Get the next available Monday for weekly order submission.
  */
 export function getNextAvailableMonday(

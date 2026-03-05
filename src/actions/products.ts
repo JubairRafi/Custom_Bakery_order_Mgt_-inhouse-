@@ -48,9 +48,12 @@ export async function createProduct(formData: FormData) {
 
     const display_order = (maxOrder?.display_order || 0) + 1;
 
+    const cutoff_hours_raw = formData.get('cutoff_hours') as string;
+    const cutoff_hours = cutoff_hours_raw ? parseInt(cutoff_hours_raw, 10) : null;
+
     const { data, error } = await supabase
         .from('products')
-        .insert({ name, display_order, category_id })
+        .insert({ name, display_order, category_id, cutoff_hours })
         .select('id')
         .single();
 
@@ -63,10 +66,12 @@ export async function updateProduct(productId: string, formData: FormData) {
     const name = formData.get('name') as string;
     const active_status = formData.get('active_status') === 'true';
     const category_id = (formData.get('category_id') as string) || null;
+    const cutoff_hours_raw = formData.get('cutoff_hours') as string;
+    const cutoff_hours = cutoff_hours_raw ? parseInt(cutoff_hours_raw, 10) : null;
 
     const { error } = await supabase
         .from('products')
-        .update({ name, active_status, category_id })
+        .update({ name, active_status, category_id, cutoff_hours })
         .eq('id', productId);
 
     if (error) return { error: error.message };

@@ -5,7 +5,7 @@ import { getActiveProductsForCustomer } from '@/actions/tags';
 import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitWeeklyOrder, getLastWeeklyOrder, getMyWeeklyOrder, editWeeklyOrder } from '@/actions/orders';
-import { getAvailableMondays, canSubmitDailyOrder } from '@/lib/cutoff';
+import { getAvailableMondays, canSubmitDailyOrder, isProductDayLocked } from '@/lib/cutoff';
 import { format, addDays, parseISO } from 'date-fns';
 import { CalendarDays, Check, AlertTriangle, Loader2, Plus, X, Info, RotateCcw, Lock } from 'lucide-react';
 import { Product, Settings } from '@/lib/types';
@@ -117,6 +117,12 @@ export default function WeeklyOrderPage() {
         return !canSubmitDailyOrder(parseISO(date), settings).allowed;
     }
 
+    function isRowDayLocked(date: string, row: OrderRow): boolean {
+        if (!settings) return false;
+        const prod = products.find((p) => p.id === row.product_id);
+        return isProductDayLocked(parseISO(date), prod ?? {}, settings);
+    }
+
     async function handleMondayChange(monday: string) {
         setSelectedMonday(monday);
         if (settings) {
@@ -156,8 +162,10 @@ export default function WeeklyOrderPage() {
                         });
                     }
                     // Don't overwrite locked days when loading last week
-                    if (!isDayLocked(targetDate)) {
-                        productMap.get(item.product_id)!.quantities[targetDate] = item.quantity;
+                    const tempRow = productMap.get(item.product_id)!;
+                    const prod = products.find((p) => p.id === item.product_id);
+                    if (!isProductDayLocked(parseISO(targetDate), prod ?? {}, settings!)) {
+                        tempRow.quantities[targetDate] = item.quantity;
                     }
                 }
             }
@@ -177,14 +185,15 @@ export default function WeeklyOrderPage() {
     }
 
     function updateQuantity(productId: string, date: string, value: number) {
-        if (isDayLocked(date)) return;
-        setOrderRows((prev) =>
-            prev.map((row) =>
-                row.product_id === productId
-                    ? { ...row, quantities: { ...row.quantities, [date]: Math.max(0, value) } }
-                    : row
-            )
-        );
+        setOrderRows((prev) => {
+            const row = prev.find((r) => r.product_id === productId);
+            if (!row || isRowDayLocked(date, row)) return prev;
+            return prev.map((r) =>
+                r.product_id === productId
+                    ? { ...r, quantities: { ...r.quantities, [date]: Math.max(0, value) } }
+                    : r
+            );
+        });
     }
 
     function setAllDaysForProduct(productId: string, value: number) {
@@ -196,7 +205,7 @@ export default function WeeklyOrderPage() {
                         quantities: Object.fromEntries(
                             Object.keys(row.quantities).map((d) => [
                                 d,
-                                isDayLocked(d) ? row.quantities[d] : Math.max(0, value),
+                                isRowDayLocked(d, row) ? row.quantities[d] : Math.max(0, value),
                             ])
                         ),
                     }
@@ -389,17 +398,11 @@ export default function WeeklyOrderPage() {
                                     <tr>
                                         <th>Product</th>
                                         {dates.map((date, i) => (
-                                            <th key={date} style={isDayLocked(date) ? { opacity: 0.5 } : {}}>
+                                            <th key={date}>
                                                 <div>{dayNames[i]}</div>
                                                 <div className="text-xs opacity-75 font-normal">
                                                     {format(parseISO(date), 'dd/MM')}
                                                 </div>
-                                                {isDayLocked(date) && (
-                                                    <div className="flex items-center justify-center gap-1 mt-1" style={{ color: '#ef4444', fontSize: '10px' }}>
-                                                        <Lock size={9} />
-                                                        <span>Locked</span>
-                                                    </div>
-                                                )}
                                             </th>
                                         ))}
                                         <th>Total</th>
@@ -411,21 +414,29 @@ export default function WeeklyOrderPage() {
                                     {orderRows.map((row) => (
                                         <tr key={row.product_id}>
                                             <td className="font-medium text-sm">{row.product_name}</td>
-                                            {dates.map((date) => (
-                                                <td key={date}>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={row.quantities[date] || ''}
-                                                        onChange={(e) =>
-                                                            updateQuantity(row.product_id, date, parseInt(e.target.value) || 0)
-                                                        }
-                                                        disabled={isDayLocked(date)}
-                                                        placeholder={isDayLocked(date) ? '—' : '0'}
-                                                        style={isDayLocked(date) ? { background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : {}}
-                                                    />
-                                                </td>
-                                            ))}
+                                            {dates.map((date) => {
+                                                const locked = isRowDayLocked(date, row);
+                                                return (
+                                                    <td key={date}>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={row.quantities[date] || ''}
+                                                            onChange={(e) =>
+                                                                updateQuantity(row.product_id, date, parseInt(e.target.value) || 0)
+                                                            }
+                                                            disabled={locked}
+                                                            placeholder={locked ? '—' : '0'}
+                                                            style={locked ? { background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : {}}
+                                                        />
+                                                        {locked && (
+                                                            <div className="flex items-center justify-center gap-1 mt-1" style={{ color: '#ef4444', fontSize: '10px' }}>
+                                                                <Lock size={9} />
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
                                             <td>
                                                 <span className="font-bold text-primary">{getTotalForProduct(row)}</span>
                                             </td>

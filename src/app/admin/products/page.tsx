@@ -19,6 +19,8 @@ export default function ProductsPage() {
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
     const [selectedProductTags, setSelectedProductTags] = useState<string[]>([]);
+    const [cutoffEnabled, setCutoffEnabled] = useState(false);
+    const [cutoffHours, setCutoffHours] = useState('12');
 
     // Manage-categories modal
     const [showCategoriesModal, setShowCategoriesModal] = useState(false);
@@ -97,6 +99,8 @@ export default function ProductsPage() {
     async function openEditModal(product: any) {
         setShowEditModal(product);
         setFormError('');
+        setCutoffEnabled(!!product.cutoff_hours);
+        setCutoffHours(String(product.cutoff_hours ?? 12));
         const tagIds = await getProductTags(product.id);
         setSelectedProductTags(tagIds);
     }
@@ -393,7 +397,7 @@ export default function ProductsPage() {
                                 Delete ({selectedIds.size})
                             </button>
                         )}
-                        <button onClick={() => { setShowCreateModal(true); setFormError(''); setSelectedProductTags([]); }} className="btn btn-primary btn-sm">
+                        <button onClick={() => { setShowCreateModal(true); setFormError(''); setSelectedProductTags([]); setCutoffEnabled(false); setCutoffHours('12'); }} className="btn btn-primary btn-sm">
                             <Plus size={16} /> Add Product
                         </button>
                     </div>
@@ -516,6 +520,27 @@ export default function ProductsPage() {
                                     </div>
                                 </div>
                             )}
+                            <div className="form-group">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={cutoffEnabled} onChange={e => setCutoffEnabled(e.target.checked)} className="w-4 h-4 rounded" />
+                                    <span className="form-label mb-0">Product-specific cutoff</span>
+                                </label>
+                                {cutoffEnabled && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <input
+                                            name="cutoff_hours"
+                                            type="number"
+                                            min="1"
+                                            max="168"
+                                            value={cutoffHours}
+                                            onChange={e => setCutoffHours(e.target.value)}
+                                            className="form-input"
+                                            style={{ width: '100px' }}
+                                        />
+                                        <span className="text-sm text-muted">hours before delivery</span>
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-ghost">Cancel</button>
                                 <button type="submit" disabled={formLoading} className="btn btn-primary">
@@ -574,6 +599,27 @@ export default function ProductsPage() {
                                     <option value="true">Active</option>
                                     <option value="false">Inactive</option>
                                 </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={cutoffEnabled} onChange={e => setCutoffEnabled(e.target.checked)} className="w-4 h-4 rounded" />
+                                    <span className="form-label mb-0">Product-specific cutoff</span>
+                                </label>
+                                {cutoffEnabled && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <input
+                                            name="cutoff_hours"
+                                            type="number"
+                                            min="1"
+                                            max="168"
+                                            value={cutoffHours}
+                                            onChange={e => setCutoffHours(e.target.value)}
+                                            className="form-input"
+                                            style={{ width: '100px' }}
+                                        />
+                                        <span className="text-sm text-muted">hours before delivery</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowEditModal(null)} className="btn btn-ghost">Cancel</button>

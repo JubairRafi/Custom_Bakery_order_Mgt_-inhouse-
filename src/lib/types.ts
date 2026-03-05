@@ -34,6 +34,7 @@ export interface Product {
     category_id?: string | null;
     category?: { id: string; name: string } | null;
     tags?: { id: string; name: string }[];
+    cutoff_hours?: number | null;
 }
 
 export interface CustomerDefaultProduct {

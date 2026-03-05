@@ -5,9 +5,9 @@ import { getActiveProductsForCustomer } from '@/actions/tags';
 import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitDailyOrder, getMyDailyOrder, editDailyOrder } from '@/actions/orders';
-import { canSubmitDailyOrder } from '@/lib/cutoff';
+import { canSubmitDailyOrder, isProductDayLocked } from '@/lib/cutoff';
 import { format, addDays, parseISO } from 'date-fns';
-import { CalendarPlus, Check, AlertTriangle, Loader2, Plus, X, Info, Pencil } from 'lucide-react';
+import { CalendarPlus, Check, AlertTriangle, Loader2, Plus, X, Info, Pencil, Lock } from 'lucide-react';
 import { Product, Settings } from '@/lib/types';
 
 interface DailyRow {
@@ -137,6 +137,12 @@ export default function DailyOrderPage() {
         return orderRows.some((r) => r.quantity > 0);
     }
 
+    function isRowLocked(productId: string): boolean {
+        if (!settings || !deliveryDate) return false;
+        const prod = products.find((p) => p.id === productId);
+        return isProductDayLocked(parseISO(deliveryDate), prod ?? {}, settings);
+    }
+
     async function handleSubmit() {
         setSubmitting(true);
         setError('');
@@ -259,32 +265,45 @@ export default function DailyOrderPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {orderRows.map((row) => (
-                                    <tr key={row.product_id}>
-                                        <td className="font-medium">{row.product_name}</td>
-                                        <td>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={row.quantity || ''}
-                                                onChange={(e) =>
-                                                    updateQuantity(row.product_id, parseInt(e.target.value) || 0)
-                                                }
-                                                placeholder="0"
-                                                className="form-input text-center py-2"
-                                                style={{ width: '100px' }}
-                                            />
-                                        </td>
-                                        <td>
-                                            <button
-                                                onClick={() => removeProduct(row.product_id)}
-                                                className="text-danger hover:bg-red-50 rounded p-1"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {orderRows.map((row) => {
+                                    const locked = isRowLocked(row.product_id);
+                                    return (
+                                        <tr key={row.product_id}>
+                                            <td className="font-medium">
+                                                {row.product_name}
+                                                {locked && (
+                                                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-danger">
+                                                        <Lock size={10} /> Locked
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={row.quantity || ''}
+                                                    onChange={(e) =>
+                                                        updateQuantity(row.product_id, parseInt(e.target.value) || 0)
+                                                    }
+                                                    placeholder={locked ? '—' : '0'}
+                                                    disabled={locked}
+                                                    className="form-input text-center py-2"
+                                                    style={locked ? { width: '100px', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : { width: '100px' }}
+                                                />
+                                            </td>
+                                            <td>
+                                                {!locked && (
+                                                    <button
+                                                        onClick={() => removeProduct(row.product_id)}
+                                                        className="text-danger hover:bg-red-50 rounded p-1"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 <tr style={{ background: '#f1f5f9' }}>
                                     <td className="font-bold">Total</td>
                                     <td className="font-bold text-primary text-center">{getTotal()}</td>

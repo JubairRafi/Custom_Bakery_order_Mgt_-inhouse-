@@ -13,9 +13,16 @@ export default function LoginPage() {
         setLoading(true);
         setError('');
         const formData = new FormData(e.currentTarget);
-        const result = await login(formData);
-        if (result?.error) {
-            setError(result.error);
+        try {
+            const result = await login(formData);
+            if (result?.error) {
+                setError(result.error);
+            }
+            // On success, login() calls redirect() and the component unmounts
+        } catch {
+            // Unexpected error — show a message and let the user retry
+            setError('Something went wrong. Please try again.');
+        } finally {
             setLoading(false);
         }
     }

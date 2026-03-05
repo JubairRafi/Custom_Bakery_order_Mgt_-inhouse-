@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { getActiveProductsForCustomer } from '@/actions/tags';
 import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
-import { submitDailyOrder } from '@/actions/orders';
+import { submitDailyOrder, getMyDailyOrder, editDailyOrder } from '@/actions/orders';
 import { canSubmitDailyOrder } from '@/lib/cutoff';
 import { format, addDays, parseISO } from 'date-fns';
-import { CalendarPlus, Check, AlertTriangle, Loader2, Plus, X, Info } from 'lucide-react';
+import { CalendarPlus, Check, AlertTriangle, Loader2, Plus, X, Info, Pencil } from 'lucide-react';
 import { Product, Settings } from '@/lib/types';
 
 interface DailyRow {
@@ -24,16 +24,19 @@ export default function DailyOrderPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [wasEdit, setWasEdit] = useState(false);
     const [error, setError] = useState('');
     const [cutoffMessage, setCutoffMessage] = useState('');
     const [canSubmit, setCanSubmit] = useState(true);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
+    const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
+    const [defaultRows, setDefaultRows] = useState<DailyRow[]>([]);
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts, defaultProds] = await Promise.all([
+                const [prods, setts, defProds] = await Promise.all([
                     getActiveProductsForCustomer(),
                     getSettings(),
                     getMyDefaultProducts(),
@@ -41,23 +44,25 @@ export default function DailyOrderPage() {
                 setProducts(prods);
                 setSettings(setts);
 
-                // Set default delivery date to tomorrow
-                const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-                setDeliveryDate(tomorrow);
+                const rows: DailyRow[] = defProds.map((p) => ({
+                    product_id: p.id,
+                    product_name: p.name,
+                    quantity: 0,
+                }));
+                setDefaultRows(rows);
 
-                // Initialize with customer's default products
-                setOrderRows(
-                    defaultProds.map((p) => ({
-                        product_id: p.id,
-                        product_name: p.name,
-                        quantity: 0,
-                    }))
-                );
+                // Check for date query param (coming from history "Edit" button)
+                const params = new URLSearchParams(window.location.search);
+                const dateParam = params.get('date');
+                const initialDate = dateParam ?? format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
-                // Check cutoff for default date
-                const check = canSubmitDailyOrder(parseISO(tomorrow), setts, new Date());
+                setDeliveryDate(initialDate);
+
+                const check = canSubmitDailyOrder(parseISO(initialDate), setts, new Date());
                 setCanSubmit(check.allowed);
                 setCutoffMessage(check.message);
+
+                await checkAndLoadExistingOrder(initialDate, rows);
             } catch (e) {
                 setError('Failed to load data.');
             }
@@ -66,12 +71,40 @@ export default function DailyOrderPage() {
         loadData();
     }, []);
 
-    function handleDateChange(date: string) {
+    async function checkAndLoadExistingOrder(date: string, fallbackRows: DailyRow[]) {
+        const existing = await getMyDailyOrder(date);
+        if (existing) {
+            setExistingOrderId(existing.id);
+            const seen = new Set<string>();
+            const rows: DailyRow[] = ((existing.order_items ?? []) as any[])
+                .filter((item: any) => {
+                    if (seen.has(item.product_id)) return false;
+                    seen.add(item.product_id);
+                    return true;
+                })
+                .map((item: any) => ({
+                    product_id: item.product_id,
+                    product_name: item.product?.name ?? 'Unknown',
+                    quantity: item.quantity,
+                }));
+            setOrderRows(rows);
+        } else {
+            setExistingOrderId(null);
+            setOrderRows(fallbackRows.map((r) => ({ ...r, quantity: 0 })));
+        }
+    }
+
+    async function handleDateChange(date: string) {
         setDeliveryDate(date);
         if (settings) {
             const check = canSubmitDailyOrder(parseISO(date), settings, new Date());
             setCanSubmit(check.allowed);
             setCutoffMessage(check.message);
+        }
+        try {
+            await checkAndLoadExistingOrder(date, defaultRows);
+        } catch {
+            // fall back silently
         }
     }
 
@@ -108,17 +141,25 @@ export default function DailyOrderPage() {
         setSubmitting(true);
         setError('');
 
-        const items = orderRows
-            .filter((r) => r.quantity > 0)
-            .map((r) => ({ product_id: r.product_id, quantity: r.quantity }));
-
-        const result = await submitDailyOrder(deliveryDate, items);
+        let result;
+        if (existingOrderId) {
+            const items = orderRows
+                .filter((r) => r.quantity > 0)
+                .map((r) => ({ product_id: r.product_id, delivery_date: deliveryDate, quantity: r.quantity }));
+            result = await editDailyOrder(existingOrderId, items);
+        } else {
+            const items = orderRows
+                .filter((r) => r.quantity > 0)
+                .map((r) => ({ product_id: r.product_id, quantity: r.quantity }));
+            result = await submitDailyOrder(deliveryDate, items);
+        }
 
         if (result.error) {
             setError(result.error);
             setSubmitting(false);
             setShowConfirmModal(false);
         } else {
+            setWasEdit(!!existingOrderId);
             setSuccess(true);
             setShowConfirmModal(false);
             setSubmitting(false);
@@ -140,9 +181,14 @@ export default function DailyOrderPage() {
                     style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
                     <Check size={36} className="text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">Order Submitted!</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                    {wasEdit ? 'Order Updated!' : 'Order Submitted!'}
+                </h2>
                 <p className="text-muted mb-6">
-                    Your daily order for {deliveryDate && format(parseISO(deliveryDate), 'MMMM dd, yyyy')} has been submitted.
+                    {wasEdit
+                        ? `Your daily order for ${deliveryDate && format(parseISO(deliveryDate), 'MMMM dd, yyyy')} has been updated.`
+                        : `Your daily order for ${deliveryDate && format(parseISO(deliveryDate), 'MMMM dd, yyyy')} has been submitted.`
+                    }
                 </p>
                 <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
             </div>
@@ -170,6 +216,15 @@ export default function DailyOrderPage() {
                 </div>
             )}
 
+            {/* Edit mode banner */}
+            {existingOrderId && (
+                <div className="mb-4 flex items-center gap-2 p-3 rounded-lg text-sm"
+                    style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                    <Pencil size={14} className="flex-shrink-0" />
+                    You are editing your existing order for this date.
+                </div>
+            )}
+
             {/* Date Selector */}
             <div className="card p-5 mb-6">
                 <div className="form-group mb-0">
@@ -178,7 +233,7 @@ export default function DailyOrderPage() {
                         type="date"
                         value={deliveryDate}
                         onChange={(e) => handleDateChange(e.target.value)}
-                        min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
+                        min={existingOrderId ? undefined : format(addDays(new Date(), 1), 'yyyy-MM-dd')}
                         className="form-input"
                         style={{ maxWidth: '250px' }}
                     />
@@ -189,7 +244,7 @@ export default function DailyOrderPage() {
             </div>
 
             {/* Product List */}
-            {canSubmit && (
+            {(canSubmit || existingOrderId) && (
                 <>
                     <div className="card mb-6">
                         <div className="p-4 border-b border-border">
@@ -274,14 +329,18 @@ export default function DailyOrderPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm text-muted">
                             <Info size={14} />
-                            Orders are locked after submission.
+                            {existingOrderId && !canSubmit
+                                ? 'This date is past its cutoff — order cannot be modified.'
+                                : existingOrderId
+                                ? 'Saving will replace your existing order for this date.'
+                                : 'Orders are locked after the cutoff time.'}
                         </div>
                         <button
                             onClick={() => setShowConfirmModal(true)}
-                            disabled={!hasAnyQuantity()}
+                            disabled={!hasAnyQuantity() || (!!existingOrderId && !canSubmit)}
                             className="btn btn-success"
                         >
-                            <Check size={18} /> Review & Submit
+                            <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit'}
                         </button>
                     </div>
                 </>
@@ -291,7 +350,9 @@ export default function DailyOrderPage() {
             {showConfirmModal && (
                 <div className="modal-backdrop">
                     <div className="modal-content">
-                        <h3 className="text-xl font-bold mb-4">Confirm Daily Order</h3>
+                        <h3 className="text-xl font-bold mb-4">
+                            {existingOrderId ? 'Confirm Order Changes' : 'Confirm Daily Order'}
+                        </h3>
                         <p className="text-muted text-sm mb-4">
                             Delivery Date: <strong>{deliveryDate && format(parseISO(deliveryDate), 'MMMM dd, yyyy')}</strong>
                         </p>
@@ -319,18 +380,13 @@ export default function DailyOrderPage() {
                             </tbody>
                         </table>
 
-                        <div className="flex items-center gap-2 p-3 rounded-lg mb-4" style={{ background: '#fef3c7' }}>
-                            <AlertTriangle size={16} className="text-warning flex-shrink-0" />
-                            <span className="text-sm text-yellow-800">This order cannot be edited after submission.</span>
-                        </div>
-
                         <div className="flex gap-3 justify-end">
                             <button onClick={() => setShowConfirmModal(false)} className="btn btn-ghost" disabled={submitting}>Cancel</button>
                             <button onClick={handleSubmit} disabled={submitting} className="btn btn-success">
                                 {submitting ? (
-                                    <><Loader2 className="animate-spin" size={16} /> Submitting...</>
+                                    <><Loader2 className="animate-spin" size={16} /> {existingOrderId ? 'Saving...' : 'Submitting...'}</>
                                 ) : (
-                                    <><Check size={16} /> Confirm & Submit</>
+                                    <><Check size={16} /> {existingOrderId ? 'Save Changes' : 'Confirm & Submit'}</>
                                 )}
                             </button>
                         </div>

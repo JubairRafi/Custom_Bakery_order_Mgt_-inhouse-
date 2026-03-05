@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -94,6 +94,8 @@ export default function OrdersPage() {
         setEditItems([]);
         const order = await getOrderById(orderId);
         setSelectedOrder(order);
+        // Sync fresh order_items back into the list so totals stay accurate
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_items: order.order_items } : o));
         setDetailLoading(false);
     }
 
@@ -235,6 +237,14 @@ export default function OrdersPage() {
                         Showing {orders.length} of {totalCount} orders
                     </p>
                 </div>
+                <button
+                    onClick={loadData}
+                    disabled={loading}
+                    className="btn btn-ghost btn-sm"
+                    title="Refresh orders"
+                >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
+                </button>
             </div>
 
             {/* Overlap Alert */}

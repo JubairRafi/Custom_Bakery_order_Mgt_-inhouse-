@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { getActiveProductsForCustomer } from '@/actions/tags';
 import { getMyDefaultProducts } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
-import { submitWeeklyOrder, getLastWeeklyOrder } from '@/actions/orders';
-import { getAvailableMondays, canSubmitWeeklyOrder } from '@/lib/cutoff';
+import { submitWeeklyOrder, getLastWeeklyOrder, getMyWeeklyOrder, editWeeklyOrder } from '@/actions/orders';
+import { getAvailableMondays, canSubmitDailyOrder } from '@/lib/cutoff';
 import { format, addDays, parseISO } from 'date-fns';
-import { CalendarDays, Check, AlertTriangle, Loader2, Plus, X, Info, RotateCcw } from 'lucide-react';
+import { CalendarDays, Check, AlertTriangle, Loader2, Plus, X, Info, RotateCcw, Lock } from 'lucide-react';
 import { Product, Settings } from '@/lib/types';
 
 interface OrderRow {
@@ -26,29 +26,43 @@ export default function WeeklyOrderPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [wasEdit, setWasEdit] = useState(false);
     const [error, setError] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
     const [loadingLastWeek, setLoadingLastWeek] = useState(false);
+    const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
+    const [defaultProds, setDefaultProds] = useState<Product[]>([]);
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts, defaultProds] = await Promise.all([
+                const [prods, setts, defProds] = await Promise.all([
                     getActiveProductsForCustomer(),
                     getSettings(),
                     getMyDefaultProducts(),
                 ]);
                 setProducts(prods);
                 setSettings(setts);
+                setDefaultProds(defProds);
 
                 const mondays = getAvailableMondays(setts, new Date());
+
+                // Check for week query param (coming from history "Edit" button)
+                const params = new URLSearchParams(window.location.search);
+                const weekParam = params.get('week');
+
+                // If a specific past week is requested for editing, include it even if past creation cutoff
+                const allMondayStrs = mondays.map((m) => format(m, 'yyyy-MM-dd'));
+                if (weekParam && !allMondayStrs.includes(weekParam)) {
+                    mondays.unshift(parseISO(weekParam));
+                }
                 setAvailableMondays(mondays);
 
                 if (mondays.length > 0) {
-                    const firstMonday = format(mondays[0], 'yyyy-MM-dd');
+                    const firstMonday = weekParam ?? format(mondays[0], 'yyyy-MM-dd');
                     setSelectedMonday(firstMonday);
-                    initializeRows(defaultProds, firstMonday);
+                    await checkAndLoadExistingOrder(firstMonday, defProds, setts);
                 }
             } catch (e) {
                 setError('Failed to load order data.');
@@ -57,6 +71,30 @@ export default function WeeklyOrderPage() {
         }
         loadData();
     }, []);
+
+    async function checkAndLoadExistingOrder(monday: string, prods: Product[], setts: Settings) {
+        const existing = await getMyWeeklyOrder(monday);
+        if (existing) {
+            setExistingOrderId(existing.id);
+            const dates = getDatesForWeek(monday);
+            const productMap = new Map<string, OrderRow>();
+            for (const item of (existing.order_items ?? []) as any[]) {
+                if (!productMap.has(item.product_id)) {
+                    productMap.set(item.product_id, {
+                        product_id: item.product_id,
+                        product_name: item.product?.name ?? 'Unknown',
+                        quantities: Object.fromEntries(dates.map((d) => [d, 0])),
+                        isDefault: false,
+                    });
+                }
+                productMap.get(item.product_id)!.quantities[item.delivery_date] = item.quantity;
+            }
+            setOrderRows(Array.from(productMap.values()));
+        } else {
+            setExistingOrderId(null);
+            initializeRows(prods, monday);
+        }
+    }
 
     function initializeRows(prods: Product[], monday: string) {
         const dates = getDatesForWeek(monday);
@@ -74,15 +112,20 @@ export default function WeeklyOrderPage() {
         return Array.from({ length: 7 }, (_, i) => format(addDays(start, i), 'yyyy-MM-dd'));
     }
 
-    function handleMondayChange(monday: string) {
+    function isDayLocked(date: string): boolean {
+        if (!settings) return false;
+        return !canSubmitDailyOrder(parseISO(date), settings).allowed;
+    }
+
+    async function handleMondayChange(monday: string) {
         setSelectedMonday(monday);
-        const dates = getDatesForWeek(monday);
-        setOrderRows((prev) =>
-            prev.map((row) => ({
-                ...row,
-                quantities: Object.fromEntries(dates.map((d) => [d, 0])),
-            }))
-        );
+        if (settings) {
+            try {
+                await checkAndLoadExistingOrder(monday, defaultProds, settings);
+            } catch {
+                // silently fall back — rows already reset via setSelectedMonday
+            }
+        }
     }
 
     async function loadLastWeekOrder() {
@@ -98,7 +141,6 @@ export default function WeeklyOrderPage() {
             const currentDates = getDatesForWeek(selectedMonday);
             const lastMonday = parseISO(lastOrder.week_start_date);
 
-            // Map items: use the day-of-week offset to map to current week dates
             const productMap = new Map<string, { product_name: string; quantities: { [date: string]: number } }>();
 
             for (const item of lastOrder.items) {
@@ -113,11 +155,13 @@ export default function WeeklyOrderPage() {
                             quantities: Object.fromEntries(currentDates.map((d) => [d, 0])),
                         });
                     }
-                    productMap.get(item.product_id)!.quantities[targetDate] = item.quantity;
+                    // Don't overwrite locked days when loading last week
+                    if (!isDayLocked(targetDate)) {
+                        productMap.get(item.product_id)!.quantities[targetDate] = item.quantity;
+                    }
                 }
             }
 
-            // Build rows from the mapped data
             const newRows: OrderRow[] = Array.from(productMap.entries()).map(([product_id, data]) => ({
                 product_id,
                 product_name: data.product_name,
@@ -133,6 +177,7 @@ export default function WeeklyOrderPage() {
     }
 
     function updateQuantity(productId: string, date: string, value: number) {
+        if (isDayLocked(date)) return;
         setOrderRows((prev) =>
             prev.map((row) =>
                 row.product_id === productId
@@ -149,7 +194,10 @@ export default function WeeklyOrderPage() {
                     ? {
                         ...row,
                         quantities: Object.fromEntries(
-                            Object.keys(row.quantities).map((d) => [d, Math.max(0, value)])
+                            Object.keys(row.quantities).map((d) => [
+                                d,
+                                isDayLocked(d) ? row.quantities[d] : Math.max(0, value),
+                            ])
                         ),
                     }
                     : row
@@ -196,20 +244,37 @@ export default function WeeklyOrderPage() {
         setSubmitting(true);
         setError('');
 
-        const items = orderRows
-            .filter((row) => getTotalForProduct(row) > 0)
-            .map((row) => ({
-                product_id: row.product_id,
-                quantities: row.quantities,
-            }));
+        let result;
 
-        const result = await submitWeeklyOrder(selectedMonday, items);
+        if (existingOrderId) {
+            const flatItems = orderRows
+                .filter((row) => getTotalForProduct(row) > 0)
+                .flatMap((row) =>
+                    Object.entries(row.quantities)
+                        .filter(([date, qty]) => qty > 0)
+                        .map(([date, qty]) => ({
+                            product_id: row.product_id,
+                            delivery_date: date,
+                            quantity: qty,
+                        }))
+                );
+            result = await editWeeklyOrder(existingOrderId, flatItems);
+        } else {
+            const items = orderRows
+                .filter((row) => getTotalForProduct(row) > 0)
+                .map((row) => ({
+                    product_id: row.product_id,
+                    quantities: row.quantities,
+                }));
+            result = await submitWeeklyOrder(selectedMonday, items);
+        }
 
         if (result.error) {
             setError(result.error);
             setSubmitting(false);
             setShowConfirmModal(false);
         } else {
+            setWasEdit(!!existingOrderId);
             setSuccess(true);
             setShowConfirmModal(false);
             setSubmitting(false);
@@ -231,10 +296,14 @@ export default function WeeklyOrderPage() {
                     style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
                     <Check size={36} className="text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">Order Submitted!</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                    {wasEdit ? 'Order Updated!' : 'Order Submitted!'}
+                </h2>
                 <p className="text-muted mb-6">
-                    Your weekly order for the week of {selectedMonday} has been submitted successfully.
-                    A confirmation email will be sent shortly.
+                    {wasEdit
+                        ? `Your weekly order for the week of ${selectedMonday} has been updated successfully.`
+                        : `Your weekly order for the week of ${selectedMonday} has been submitted successfully. A confirmation email will be sent shortly.`
+                    }
                 </p>
                 <a href="/dashboard" className="btn btn-primary">Back to Dashboard</a>
             </div>
@@ -303,6 +372,15 @@ export default function WeeklyOrderPage() {
                 </div>
             ) : (
                 <>
+                    {/* Edit mode banner */}
+                    {existingOrderId && (
+                        <div className="mb-4 flex items-center gap-2 p-3 rounded-lg text-sm"
+                            style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                            <Info size={14} className="flex-shrink-0" />
+                            You are editing your existing order for this week. Days that have passed their cutoff are locked and cannot be changed.
+                        </div>
+                    )}
+
                     {/* Order Grid */}
                     <div className="card mb-6">
                         <div className="order-grid">
@@ -311,11 +389,17 @@ export default function WeeklyOrderPage() {
                                     <tr>
                                         <th>Product</th>
                                         {dates.map((date, i) => (
-                                            <th key={date}>
+                                            <th key={date} style={isDayLocked(date) ? { opacity: 0.5 } : {}}>
                                                 <div>{dayNames[i]}</div>
                                                 <div className="text-xs opacity-75 font-normal">
                                                     {format(parseISO(date), 'dd/MM')}
                                                 </div>
+                                                {isDayLocked(date) && (
+                                                    <div className="flex items-center justify-center gap-1 mt-1" style={{ color: '#ef4444', fontSize: '10px' }}>
+                                                        <Lock size={9} />
+                                                        <span>Locked</span>
+                                                    </div>
+                                                )}
                                             </th>
                                         ))}
                                         <th>Total</th>
@@ -336,7 +420,9 @@ export default function WeeklyOrderPage() {
                                                         onChange={(e) =>
                                                             updateQuantity(row.product_id, date, parseInt(e.target.value) || 0)
                                                         }
-                                                        placeholder="0"
+                                                        disabled={isDayLocked(date)}
+                                                        placeholder={isDayLocked(date) ? '—' : '0'}
+                                                        style={isDayLocked(date) ? { background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : {}}
                                                     />
                                                 </td>
                                             ))}
@@ -421,20 +507,31 @@ export default function WeeklyOrderPage() {
                     )}
 
                     {/* Submit Button */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-muted">
-                            <Info size={14} />
-                            Orders are locked after submission and cannot be edited.
-                        </div>
-                        <button
-                            onClick={() => setShowConfirmModal(true)}
-                            disabled={!hasAnyQuantity()}
-                            className="btn btn-success"
-                            style={{ padding: '12px 28px', fontSize: '0.95rem' }}
-                        >
-                            <Check size={18} /> Review & Submit Order
-                        </button>
-                    </div>
+                    {(() => {
+                        const allDaysLocked = selectedMonday
+                            ? getDatesForWeek(selectedMonday).every(isDayLocked)
+                            : false;
+                        return (
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-sm text-muted">
+                                    <Info size={14} />
+                                    {existingOrderId && allDaysLocked
+                                        ? 'All days in this week are past their cutoff and cannot be edited.'
+                                        : existingOrderId
+                                        ? 'Past-due days are locked and cannot be modified.'
+                                        : 'Review your order before submitting.'}
+                                </div>
+                                <button
+                                    onClick={() => setShowConfirmModal(true)}
+                                    disabled={!hasAnyQuantity() || (!!existingOrderId && allDaysLocked)}
+                                    className="btn btn-success"
+                                    style={{ padding: '12px 28px', fontSize: '0.95rem' }}
+                                >
+                                    <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit Order'}
+                                </button>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
 
@@ -442,7 +539,9 @@ export default function WeeklyOrderPage() {
             {showConfirmModal && (
                 <div className="modal-backdrop">
                     <div className="modal-content" style={{ maxWidth: '700px' }}>
-                        <h3 className="text-xl font-bold mb-4">Confirm Weekly Order</h3>
+                        <h3 className="text-xl font-bold mb-4">
+                            {existingOrderId ? 'Confirm Order Changes' : 'Confirm Weekly Order'}
+                        </h3>
                         <p className="text-muted text-sm mb-4">
                             Week of <strong>{selectedMonday && format(parseISO(selectedMonday), 'MMMM dd, yyyy')}</strong>
                         </p>
@@ -478,12 +577,14 @@ export default function WeeklyOrderPage() {
                             </table>
                         </div>
 
-                        <div className="flex items-center gap-2 p-3 rounded-lg mb-4" style={{ background: '#fef3c7' }}>
-                            <AlertTriangle size={16} className="text-warning flex-shrink-0" />
-                            <span className="text-sm text-yellow-800">
-                                This order cannot be edited after submission.
-                            </span>
-                        </div>
+                        {!existingOrderId && (
+                            <div className="flex items-center gap-2 p-3 rounded-lg mb-4" style={{ background: '#fef3c7' }}>
+                                <AlertTriangle size={16} className="text-warning flex-shrink-0" />
+                                <span className="text-sm text-yellow-800">
+                                    Please review your order carefully before submitting.
+                                </span>
+                            </div>
+                        )}
 
                         <div className="flex gap-3 justify-end">
                             <button
@@ -500,11 +601,13 @@ export default function WeeklyOrderPage() {
                             >
                                 {submitting ? (
                                     <>
-                                        <Loader2 className="animate-spin" size={16} /> Submitting...
+                                        <Loader2 className="animate-spin" size={16} />
+                                        {existingOrderId ? 'Saving...' : 'Submitting...'}
                                     </>
                                 ) : (
                                     <>
-                                        <Check size={16} /> Confirm & Submit
+                                        <Check size={16} />
+                                        {existingOrderId ? 'Save Changes' : 'Confirm & Submit'}
                                     </>
                                 )}
                             </button>

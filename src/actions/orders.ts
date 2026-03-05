@@ -339,7 +339,8 @@ export async function updateOrderItems(
     const supabase = await createClient();
 
     // Delete existing items
-    await supabase.from('order_items').delete().eq('order_id', orderId);
+    const { error: deleteError } = await supabase.from('order_items').delete().eq('order_id', orderId);
+    if (deleteError) return { error: deleteError.message };
 
     // Insert updated items
     const orderItems = items
@@ -493,6 +494,89 @@ export async function getMyOrders() {
 
     if (error) throw new Error(error.message);
     return data || [];
+}
+
+export async function getMyOrderById(orderId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+        .from('orders')
+        .select('*, order_items(*, product:products(name))')
+        .eq('id', orderId)
+        .eq('customer_id', user.id)
+        .single();
+    return data ?? null;
+}
+
+export async function getMyWeeklyOrder(weekStartDate: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data } = await supabase
+        .from('orders')
+        .select('id, week_start_date, order_items(product_id, delivery_date, quantity, product:products(name))')
+        .eq('customer_id', user.id)
+        .eq('order_type', 'weekly')
+        .eq('week_start_date', weekStartDate)
+        .single();
+
+    return data ?? null;
+}
+
+export async function editWeeklyOrder(
+    orderId: string,
+    items: { product_id: string; delivery_date: string; quantity: number }[]
+) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { data: order } = await supabase
+        .from('orders')
+        .select('customer_id')
+        .eq('id', orderId)
+        .single();
+
+    if (!order || order.customer_id !== user.id) return { error: 'Order not found' };
+
+    return updateOrderItems(orderId, items);
+}
+
+export async function getMyDailyOrder(deliveryDate: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data } = await supabase
+        .from('orders')
+        .select('id, delivery_date, order_items(product_id, delivery_date, quantity, product:products(name))')
+        .eq('customer_id', user.id)
+        .eq('order_type', 'daily')
+        .eq('delivery_date', deliveryDate)
+        .single();
+
+    return data ?? null;
+}
+
+export async function editDailyOrder(
+    orderId: string,
+    items: { product_id: string; delivery_date: string; quantity: number }[]
+) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { data: order } = await supabase
+        .from('orders')
+        .select('customer_id')
+        .eq('id', orderId)
+        .single();
+
+    if (!order || order.customer_id !== user.id) return { error: 'Order not found' };
+
+    return updateOrderItems(orderId, items);
 }
 
 export async function getLastWeeklyOrder() {

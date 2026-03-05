@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getMyOrders } from '@/actions/orders';
-import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, X } from 'lucide-react';
+import { getMyOrders, getMyOrderById } from '@/actions/orders';
+import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, Pencil } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -13,6 +13,7 @@ export default function OrderHistoryPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('');
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [viewLoading, setViewLoading] = useState<string | null>(null);
 
     useEffect(() => {
         getMyOrders().then((data) => {
@@ -35,6 +36,21 @@ export default function OrderHistoryPage() {
             return true;
         });
     }, [orders, searchQuery, filterType]);
+
+    async function handleView(order: any) {
+        if (selectedOrder?.id === order.id) {
+            setSelectedOrder(null);
+            return;
+        }
+        setViewLoading(order.id);
+        const fresh = await getMyOrderById(order.id);
+        const data = fresh || order;
+        setSelectedOrder(data);
+        if (fresh) {
+            setOrders(prev => prev.map(o => o.id === order.id ? fresh : o));
+        }
+        setViewLoading(null);
+    }
 
     // Build weekly grid for display
     function buildWeeklyGrid(order: any) {
@@ -139,20 +155,34 @@ export default function OrderHistoryPage() {
                                         {format(new Date(order.created_at), 'MMM dd, yyyy HH:mm')}
                                     </span>
                                     <button
-                                        onClick={() => setSelectedOrder(selectedOrder?.id === order.id ? null : order)}
+                                        onClick={() => handleView(order)}
+                                        disabled={viewLoading === order.id}
                                         className="btn btn-ghost btn-sm"
                                     >
-                                        <Eye size={14} /> {selectedOrder?.id === order.id ? 'Hide' : 'View'}
+                                        {viewLoading === order.id
+                                            ? <Loader2 size={14} className="animate-spin" />
+                                            : <Eye size={14} />}
+                                        {selectedOrder?.id === order.id ? 'Hide' : 'View'}
                                     </button>
+                                    <a
+                                        href={
+                                            order.order_type === 'weekly'
+                                                ? `/dashboard/weekly-order?week=${order.week_start_date}`
+                                                : `/dashboard/daily-order?date=${order.delivery_date}`
+                                        }
+                                        className="btn btn-outline btn-sm"
+                                    >
+                                        <Pencil size={14} /> Edit
+                                    </a>
                                 </div>
                             </div>
 
                             {/* Expanded detail view */}
                             {selectedOrder?.id === order.id && (
                                 <div className="p-4">
-                                    {order.order_type === 'weekly' ? (
+                                    {selectedOrder.order_type === 'weekly' ? (
                                         (() => {
-                                            const gridData = buildWeeklyGrid(order);
+                                            const gridData = buildWeeklyGrid(selectedOrder);
                                             if (!gridData) return null;
                                             return (
                                                 <div className="overflow-x-auto">
@@ -205,7 +235,7 @@ export default function OrderHistoryPage() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {order.order_items?.map((item: any) => (
+                                                {selectedOrder.order_items?.map((item: any) => (
                                                     <tr key={item.id}>
                                                         <td className="font-medium">{item.product?.name || 'Unknown'}</td>
                                                         <td className="text-muted">{item.delivery_date}</td>
@@ -218,7 +248,7 @@ export default function OrderHistoryPage() {
                                     <div className="mt-3 text-right text-sm text-muted">
                                         <Package size={14} className="inline mr-1" />
                                         Total: <strong className="text-primary">
-                                            {order.order_items?.reduce((sum: number, i: any) => sum + i.quantity, 0) || 0}
+                                            {selectedOrder.order_items?.reduce((sum: number, i: any) => sum + i.quantity, 0) || 0}
                                         </strong> items
                                     </div>
                                 </div>

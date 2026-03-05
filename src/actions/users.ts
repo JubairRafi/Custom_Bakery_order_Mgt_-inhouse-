@@ -114,9 +114,15 @@ export async function getMyDefaultProducts(): Promise<Product[]> {
 
     if (error || !data) return [];
 
+    const seen = new Set<string>();
     return data
         .map((d: any) => d.product)
-        .filter((p: any) => p && p.active_status)
+        .filter((p: any) => {
+            if (!p || !p.active_status) return false;
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+        })
         .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
 }
 

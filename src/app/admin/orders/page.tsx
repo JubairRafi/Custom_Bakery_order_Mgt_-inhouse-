@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
 import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw } from 'lucide-react';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -22,6 +22,11 @@ export default function OrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [showDateFilter, setShowDateFilter] = useState(false);
+    const [dateFromInput, setDateFromInput] = useState('');
+    const [dateToInput, setDateToInput] = useState('');
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -41,15 +46,17 @@ export default function OrdersPage() {
         getOverlaps().then((ovs) => { setOverlaps(ovs); setOverlapsLoading(false); });
     }, []);
 
-    // Server-side filter effect — search only commits on Enter, dropdowns fire immediately
+    // Server-side filter effect — search only commits on Enter, dropdowns/dates fire immediately
     useEffect(() => {
         const filters = {
             customer_id: filterCustomer || undefined,
             order_type: filterType || undefined,
             search: searchQuery || undefined,
+            date_from: filterDateFrom || undefined,
+            date_to: filterDateTo || undefined,
         };
         loadData(filters);
-    }, [filterCustomer, filterType, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [filterCustomer, filterType, searchQuery, filterDateFrom, filterDateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
     async function loadData(filters: any = {}) {
         setLoading(true);
@@ -60,6 +67,17 @@ export default function OrdersPage() {
         setHasMore(result.hasMore);
         setPage(1);
         setLoading(false);
+    }
+
+    function applyQuickWeek(offset: 0 | -1) {
+        const ref = offset === 0 ? new Date() : addDays(new Date(), -7);
+        const from = format(startOfWeek(ref, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const to = format(endOfWeek(ref, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        setDateFromInput(from);
+        setDateToInput(to);
+        setFilterDateFrom(from);
+        setFilterDateTo(to);
+        setShowDateFilter(false);
     }
 
     async function loadMore() {
@@ -366,15 +384,57 @@ export default function OrdersPage() {
                         <option value="weekly">Weekly</option>
                         <option value="daily">Daily</option>
                     </select>
-                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery || searchInput) && (
+                    <button
+                        onClick={() => setShowDateFilter(v => !v)}
+                        className={`btn btn-sm ${filterDateFrom || filterDateTo ? 'btn-primary' : 'btn-outline'}`}
+                    >
+                        <CalendarDays size={14} /> Date Filter{filterDateFrom || filterDateTo ? ' ●' : ''}
+                    </button>
+                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery || searchInput || filterDateFrom || filterDateTo) && (
                         <button
-                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); }}
+                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); setShowDateFilter(false); setDateFromInput(''); setDateToInput(''); setFilterDateFrom(''); setFilterDateTo(''); }}
                             className="btn btn-ghost btn-sm"
                         >
                             <X size={14} /> Clear
                         </button>
                     )}
                 </div>
+                {showDateFilter && (
+                    <div className="flex flex-wrap items-center gap-3 pt-3 mt-3 border-t border-border">
+                        <span className="text-sm text-muted font-medium">Delivery week:</span>
+                        <button onClick={() => applyQuickWeek(-1)} className="btn btn-outline btn-sm">Last Week</button>
+                        <button onClick={() => applyQuickWeek(0)} className="btn btn-outline btn-sm">Current Week</button>
+                        <span style={{ borderLeft: '1px solid currentColor', height: '1.2em', opacity: 0.2 }} />
+                        <span className="text-sm text-muted">From</span>
+                        <input
+                            type="date"
+                            value={dateFromInput}
+                            onChange={(e) => setDateFromInput(e.target.value)}
+                            className="form-input py-1.5 text-sm"
+                        />
+                        <span className="text-sm text-muted">To</span>
+                        <input
+                            type="date"
+                            value={dateToInput}
+                            onChange={(e) => setDateToInput(e.target.value)}
+                            className="form-input py-1.5 text-sm"
+                        />
+                        <button
+                            onClick={() => { setFilterDateFrom(dateFromInput); setFilterDateTo(dateToInput); setShowDateFilter(false); }}
+                            className="btn btn-primary btn-sm"
+                        >
+                            Apply
+                        </button>
+                        {(filterDateFrom || filterDateTo) && (
+                            <button
+                                onClick={() => { setDateFromInput(''); setDateToInput(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+                                className="btn btn-ghost btn-sm text-muted"
+                            >
+                                <X size={14} /> Clear dates
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Orders Table */}

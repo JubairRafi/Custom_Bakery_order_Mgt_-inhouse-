@@ -238,23 +238,38 @@ export async function getOrders(filters?: {
     if (filters?.order_type) {
         query = query.eq('order_type', filters.order_type);
     }
-    if (filters?.date_from) {
-        query = query.gte('created_at', filters.date_from);
-    }
-    if (filters?.date_to) {
-        query = query.lte('created_at', filters.date_to);
+    if (filters?.date_from || filters?.date_to) {
+        const from = filters?.date_from;
+        const to = filters?.date_to;
+        const weeklyParts: string[] = [];
+        const dailyParts: string[] = [];
+        if (from) { weeklyParts.push(`week_start_date.gte.${from}`); dailyParts.push(`delivery_date.gte.${from}`); }
+        if (to)   { weeklyParts.push(`week_start_date.lte.${to}`);   dailyParts.push(`delivery_date.lte.${to}`); }
+        const weeklyClause = weeklyParts.length > 1 ? `and(${weeklyParts.join(',')})` : weeklyParts[0];
+        const dailyClause  = dailyParts.length  > 1 ? `and(${dailyParts.join(',')})` : dailyParts[0];
+        query = query.or(`${weeklyClause},${dailyClause}`);
     }
     if (filters?.search) {
         const q = filters.search;
-        // Find customer IDs matching the search term
+        // Customer name search
         const { data: matchingCustomers } = await supabase
             .from('users').select('id').ilike('name', `%${q}%`);
         const customerIds = (matchingCustomers ?? []).map((c: any) => c.id);
-        if (customerIds.length > 0) {
-            query = query.or(`order_type.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`);
-        } else {
-            query = query.ilike('order_type', `%${q}%`);
+        // PO number search — UUID range query avoids any text cast issues
+        const poIds: string[] = [];
+        if (/^[0-9a-fA-F]{8}$/.test(q)) {
+            const prefix = q.toLowerCase();
+            const { data: poMatches } = await supabase
+                .from('orders').select('id')
+                .gte('id', `${prefix}-0000-0000-0000-000000000000`)
+                .lte('id', `${prefix}-ffff-ffff-ffff-ffffffffffff`);
+            poIds.push(...(poMatches ?? []).map((o: any) => o.id));
         }
+        // Build OR parts
+        const orParts: string[] = [`order_type.ilike.%${q}%`];
+        if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(',')})`);
+        if (poIds.length > 0)       orParts.push(`id.in.(${poIds.join(',')})`);
+        query = query.or(orParts.join(','));
     }
 
     const { data, error, count } = await query.range(from, from + pageSize - 1);

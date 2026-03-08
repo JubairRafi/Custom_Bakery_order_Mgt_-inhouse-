@@ -7,7 +7,7 @@ import PrintButton from './PrintButton';
 
 export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }) {
     const { orderId } = await params;
-    return { title: `Invoice #${orderId.slice(0, 8).toUpperCase()}` };
+    return { title: `Invoice PO ${orderId.slice(0, 8).toUpperCase()}` };
 }
 
 export default async function InvoicePage({ params }: { params: Promise<{ orderId: string }> }) {
@@ -77,7 +77,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
                         <img src="/logo.jpg" alt="St George Bakery" style={{ height: '90px', width: 'auto' }} />
                     </div>
                     <div className="inv-meta">
-                        <strong>#{invoiceNumber}</strong>
+                        <strong>PO {invoiceNumber}</strong>
                         {format(new Date(order.created_at), 'dd MMM yyyy')}<br />
                         <span style={{ textTransform: 'capitalize' }}>{order.order_type} Order Invoice</span>
                     </div>

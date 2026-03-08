@@ -142,6 +142,58 @@ export async function getMyDefaultProducts(): Promise<Product[]> {
         .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
 }
 
+export async function bulkCreateCustomers(
+    rows: {
+        name: string;
+        email: string;
+        password: string;
+        delivery_address: string | null;
+        point_of_contact: string | null;
+        contact_number: string | null;
+        delivery_time: string | null;
+    }[]
+): Promise<{ inserted: number; errors: string[] }> {
+    if (rows.length === 0) return { inserted: 0, errors: [] };
+
+    const serviceSupabase = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    let inserted = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+        const { data: authUser, error: authError } = await serviceSupabase.auth.admin.createUser({
+            email: row.email,
+            password: row.password,
+            email_confirm: true,
+            user_metadata: { name: row.name, role: 'customer' },
+        });
+
+        if (authError) {
+            errors.push(`${row.email}: ${authError.message}`);
+            continue;
+        }
+
+        if (row.delivery_address || row.point_of_contact || row.contact_number || row.delivery_time) {
+            await serviceSupabase
+                .from('users')
+                .update({
+                    delivery_address: row.delivery_address,
+                    point_of_contact: row.point_of_contact,
+                    contact_number: row.contact_number,
+                    delivery_time: row.delivery_time,
+                })
+                .eq('id', authUser.user.id);
+        }
+
+        inserted++;
+    }
+
+    return { inserted, errors };
+}
+
 export async function setCustomerDefaultProducts(customerId: string, productIds: string[]) {
     const supabase = await createClient();
 

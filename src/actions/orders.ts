@@ -262,6 +262,18 @@ export async function getOrderById(orderId: string) {
     return data;
 }
 
+export async function getOrderForInvoice(orderId: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*, customer:users!customer_id(id, name, email, delivery_address, contact_number), order_items(*, product:products(name))')
+        .eq('id', orderId)
+        .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+}
+
 export async function deleteOrder(orderId: string) {
     const supabase = await createClient();
     const { error } = await supabase
@@ -481,19 +493,21 @@ export async function resolveOverlap(
 
 // ─── Customer Order History ────────────────────────────
 
-export async function getMyOrders() {
+export async function getMyOrders(page = 1, pageSize = 20) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    if (!user) return { data: [], count: 0, hasMore: false };
 
-    const { data, error } = await supabase
+    const from = (page - 1) * pageSize;
+    const { data, error, count } = await supabase
         .from('orders')
-        .select('*, order_items(*, product:products(name))')
+        .select('*, order_items(*, product:products(name))', { count: 'exact' })
         .eq('customer_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return { data: data ?? [], count: count ?? 0, hasMore: (from + pageSize) < (count ?? 0) };
 }
 
 export async function getMyOrderById(orderId: string) {

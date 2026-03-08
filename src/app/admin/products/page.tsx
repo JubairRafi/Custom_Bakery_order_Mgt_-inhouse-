@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getProducts, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkDeleteProducts } from '@/actions/products';
+import { getProducts, getProductsPaginated, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkDeleteProducts } from '@/actions/products';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '@/actions/categories';
 import { getTags, createTag, deleteTag, getProductTags, setProductTags } from '@/actions/tags';
 import { Package, Plus, Edit, ToggleLeft, ToggleRight, Loader2, X, Check, Search, Tag, FolderOpen, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
@@ -12,6 +12,10 @@ export default function ProductsPage() {
     const [categories, setCategories] = useState<any[]>([]);
     const [tags, setTags] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     // Product modals
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -65,11 +69,25 @@ export default function ProductsPage() {
     useEffect(() => { loadData(); }, []);
 
     async function loadData() {
-        const [prods, cats, tgs] = await Promise.all([getProducts(), getCategories(), getTags()]);
-        setProducts(prods);
+        const [result, cats, tgs] = await Promise.all([getProductsPaginated(1, 50), getCategories(), getTags()]);
+        setProducts(result.data);
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(1);
         setCategories(cats);
         setTags(tgs);
         setLoading(false);
+    }
+
+    async function loadMore() {
+        setLoadingMore(true);
+        const next = page + 1;
+        const result = await getProductsPaginated(next, 50);
+        setProducts(prev => { const ids = new Set(prev.map((p: any) => p.id)); return [...prev, ...result.data.filter((p: any) => !ids.has(p.id))]; });
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(next);
+        setLoadingMore(false);
     }
 
     // ── Product create ─────────────────────────────────────────────────────
@@ -478,6 +496,15 @@ export default function ProductsPage() {
                     <div className="p-8 text-center text-muted">No products found.</div>
                 )}
             </div>
+
+            {hasMore && (
+                <div className="flex justify-center mt-4">
+                    <button onClick={loadMore} disabled={loadingMore} className="btn btn-outline btn-sm">
+                        {loadingMore && <Loader2 size={14} className="animate-spin" />}
+                        {loadingMore ? 'Loading...' : `Load More (${totalCount - products.length} remaining)`}
+                    </button>
+                </div>
+            )}
 
             {/* ── Create Product Modal ─────────────────────────────────── */}
             {showCreateModal && (

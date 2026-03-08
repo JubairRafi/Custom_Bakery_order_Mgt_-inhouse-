@@ -426,9 +426,24 @@ export default function OrdersPage() {
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-1">
-                                            <button onClick={() => openOrderDetail(order.id)} className="btn btn-ghost btn-sm" title="View / Edit">
+                                            <button onClick={() => openOrderDetail(order.id)} className="btn btn-ghost btn-sm" title="View">
                                                 <Eye size={14} />
                                             </button>
+                                            {isOrderPast(order) ? (
+                                                <a
+                                                    href={`/invoice/${order.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="btn btn-ghost btn-sm"
+                                                    title="Download Invoice"
+                                                >
+                                                    Invoice
+                                                </a>
+                                            ) : (
+                                                <button onClick={() => { openOrderDetail(order.id); }} className="btn btn-ghost btn-sm" title="Edit">
+                                                    <Edit size={14} />
+                                                </button>
+                                            )}
                                             <button onClick={() => handleDelete(order.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
                                                 <Trash2 size={14} />
                                             </button>
@@ -490,6 +505,15 @@ export default function OrdersPage() {
                                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
                                             </button>
                                         </>
+                                    ) : isOrderPast(selectedOrder) ? (
+                                        <a
+                                            href={`/invoice/${selectedOrder.id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="btn btn-secondary btn-sm"
+                                        >
+                                            Download Invoice
+                                        </a>
                                     ) : null}
                                     <button onClick={() => { setSelectedOrder(null); setIsEditing(false); }} className="text-muted hover:text-foreground ml-1">
                                         <X size={20} />

@@ -25,6 +25,22 @@ export async function getActiveProducts() {
     return (data ?? []).map(normalizeProduct);
 }
 
+export async function getProductsPaginated(page = 1, pageSize = 50) {
+    const supabase = await createClient();
+    const from = (page - 1) * pageSize;
+    const { data, error, count } = await supabase
+        .from('products')
+        .select('*, category:product_categories(id, name), tags:product_tags(tag:tags(id, name))', { count: 'exact' })
+        .order('display_order', { ascending: true })
+        .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    return {
+        data: (data ?? []).map(normalizeProduct),
+        count: count ?? 0,
+        hasMore: (from + pageSize) < (count ?? 0),
+    };
+}
+
 /** Flatten nested product_tags join into a flat tags array */
 function normalizeProduct(p: any) {
     return {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getCustomers, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts, bulkCreateCustomers } from '@/actions/users';
+import { getCustomers, getCustomersPaginated, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts, bulkCreateCustomers } from '@/actions/users';
 import { getProducts } from '@/actions/products';
 import { getTags, getCustomerTags, setCustomerTags } from '@/actions/tags';
 import { Users, Plus, Edit, Ban, KeyRound, Package, Loader2, X, Check, Search, Tag, Upload, AlertCircle } from 'lucide-react';
@@ -11,6 +11,10 @@ export default function CustomersPage() {
     const [products, setProducts] = useState<any[]>([]);
     const [allTags, setAllTags] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [search, setSearch] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState<any>(null);
@@ -32,11 +36,25 @@ export default function CustomersPage() {
     }, []);
 
     async function loadData() {
-        const [custs, prods, tgs] = await Promise.all([getCustomers(), getProducts(), getTags()]);
-        setCustomers(custs);
+        const [result, prods, tgs] = await Promise.all([getCustomersPaginated(1, 50), getProducts(), getTags()]);
+        setCustomers(result.data);
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(1);
         setProducts(prods.filter((p: any) => p.active_status));
         setAllTags(tgs);
         setLoading(false);
+    }
+
+    async function loadMore() {
+        setLoadingMore(true);
+        const next = page + 1;
+        const result = await getCustomersPaginated(next, 50);
+        setCustomers(prev => { const ids = new Set(prev.map((c: any) => c.id)); return [...prev, ...result.data.filter((c: any) => !ids.has(c.id))]; });
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(next);
+        setLoadingMore(false);
     }
 
     async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
@@ -286,6 +304,15 @@ export default function CustomersPage() {
                     <div className="p-8 text-center text-muted">No customers found.</div>
                 )}
             </div>
+
+            {hasMore && (
+                <div className="flex justify-center mt-4">
+                    <button onClick={loadMore} disabled={loadingMore} className="btn btn-outline btn-sm">
+                        {loadingMore && <Loader2 size={14} className="animate-spin" />}
+                        {loadingMore ? 'Loading...' : `Load More (${totalCount - customers.length} remaining)`}
+                    </button>
+                </div>
+            )}
 
             {/* Create Modal */}
             {showCreateModal && (

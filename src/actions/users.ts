@@ -107,6 +107,23 @@ export async function resetCustomerPassword(userId: string, newPassword: string)
     return { success: true };
 }
 
+export async function getCustomersPaginated(page = 1, pageSize = 50) {
+    const supabase = await createClient();
+    const from = (page - 1) * pageSize;
+    const { data, error, count } = await supabase
+        .from('users')
+        .select('*', { count: 'exact' })
+        .eq('role', 'customer')
+        .order('name')
+        .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    return {
+        data: data ?? [],
+        count: count ?? 0,
+        hasMore: (from + pageSize) < (count ?? 0),
+    };
+}
+
 export async function getCustomerDefaultProducts(customerId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase

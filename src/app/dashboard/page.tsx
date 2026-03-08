@@ -5,11 +5,7 @@ import Link from 'next/link';
 
 export default async function CustomerDashboard() {
     const user = await getCurrentUser();
-    const orders = await getMyOrders();
-
-    const weeklyOrders = orders.filter((o: any) => o.order_type === 'weekly').length;
-    const dailyOrders = orders.filter((o: any) => o.order_type === 'daily').length;
-    const recentOrders = orders.slice(0, 5);
+    const { data: recentOrders, count: totalOrders } = await getMyOrders(1, 5);
 
     return (
         <div className="animate-fade-in">
@@ -60,7 +56,7 @@ export default async function CustomerDashboard() {
                         </div>
                     </div>
                     <p className="text-xs text-muted mt-3">
-                        {weeklyOrders} weekly · {dailyOrders} daily orders total
+                        {totalOrders} total orders
                     </p>
                 </Link>
             </div>

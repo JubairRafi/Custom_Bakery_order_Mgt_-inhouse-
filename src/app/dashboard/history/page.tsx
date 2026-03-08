@@ -10,17 +10,34 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export default function OrderHistoryPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('');
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [viewLoading, setViewLoading] = useState<string | null>(null);
 
     useEffect(() => {
-        getMyOrders().then((data) => {
-            setOrders(data);
+        getMyOrders(1, 20).then((result) => {
+            setOrders(result.data);
+            setTotalCount(result.count);
+            setHasMore(result.hasMore);
             setLoading(false);
         });
     }, []);
+
+    async function loadMore() {
+        setLoadingMore(true);
+        const next = page + 1;
+        const result = await getMyOrders(next, 20);
+        setOrders(prev => { const ids = new Set(prev.map((o: any) => o.id)); return [...prev, ...result.data.filter((o: any) => !ids.has(o.id))]; });
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(next);
+        setLoadingMore(false);
+    }
 
     const filteredOrders = useMemo(() => {
         return orders.filter((o) => {
@@ -274,6 +291,15 @@ export default function OrderHistoryPage() {
                     <p className="text-muted text-sm mt-1">
                         {searchQuery || filterType ? 'Try adjusting your search or filters.' : 'Your order history will appear here after you submit orders.'}
                     </p>
+                </div>
+            )}
+
+            {hasMore && (
+                <div className="flex justify-center mt-4">
+                    <button onClick={loadMore} disabled={loadingMore} className="btn btn-outline btn-sm">
+                        {loadingMore && <Loader2 size={14} className="animate-spin" />}
+                        {loadingMore ? 'Loading...' : `Load More (${totalCount - orders.length} remaining)`}
+                    </button>
                 </div>
             )}
         </div>

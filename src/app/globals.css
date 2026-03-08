@@ -148,6 +148,9 @@ body {
 }
 
 .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #f1f5f9;
   font-weight: 600;
   font-size: 0.75rem;

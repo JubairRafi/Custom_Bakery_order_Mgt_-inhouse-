@@ -247,8 +247,8 @@ export default function OrdersPage() {
     ) : null;
 
     return (
-        <div className="animate-fade-in">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div className="animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4 shrink-0">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
                         <ShoppingCart size={24} className="text-primary" />
@@ -270,12 +270,12 @@ export default function OrdersPage() {
 
             {/* Overlap Alert */}
             {overlapsLoading && (
-                <div className="flex items-center gap-2 text-muted text-sm mb-4">
+                <div className="flex items-center gap-2 text-muted text-sm mb-4 shrink-0">
                     <Loader2 size={14} className="animate-spin" /> Checking overlaps...
                 </div>
             )}
             {!overlapsLoading && overlaps.length > 0 && (
-                <div className="card mb-6 border-danger/30">
+                <div className="card mb-4 border-danger/30 shrink-0">
                     <div className="p-4" style={{ background: '#fef2f2' }}>
                         <div className="flex items-center gap-2 mb-3">
                             <AlertTriangle size={18} className="text-danger" />
@@ -346,7 +346,7 @@ export default function OrdersPage() {
             )}
 
             {/* Filters + Search */}
-            <div className="card p-4 mb-6">
+            <div className="card p-4 mb-4 shrink-0">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="relative flex-1" style={{ minWidth: '200px', maxWidth: '320px' }}>
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -438,9 +438,10 @@ export default function OrdersPage() {
             </div>
 
             {/* Orders Table */}
+            <div className="flex-1 overflow-auto min-h-0">
             <div className="card">
                 <table className="data-table">
-                    <thead>
+                    <thead className="sticky top-0 z-[5]">
                         <tr>
                             <th>Customer</th>
                             <th>Type</th>
@@ -514,8 +515,10 @@ export default function OrdersPage() {
                 )}
             </div>
 
+            </div>{/* end flex-1 scroll container */}
+
             {hasMore && (
-                <div className="flex justify-center mt-4">
+                <div className="flex justify-center py-3 shrink-0">
                     <button
                         onClick={loadMore}
                         disabled={loadingMore}

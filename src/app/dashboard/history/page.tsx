@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getMyOrders, getMyOrderById } from '@/actions/orders';
 import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, Pencil } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
@@ -14,45 +14,43 @@ export default function OrderHistoryPage() {
     const [hasMore, setHasMore] = useState(false);
     const [page, setPage] = useState(1);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('');
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [viewLoading, setViewLoading] = useState<string | null>(null);
+    const activeFilters = useRef<any>({});
 
+    // Server-side filter effect — search only commits on Enter, dropdown fires immediately
     useEffect(() => {
-        getMyOrders(1, 20).then((result) => {
-            setOrders(result.data);
-            setTotalCount(result.count);
-            setHasMore(result.hasMore);
-            setLoading(false);
-        });
-    }, []);
+        const filters = {
+            orderType: filterType || undefined,
+            search: searchQuery || undefined,
+        };
+        loadData(filters);
+    }, [searchQuery, filterType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function loadData(filters: any = {}) {
+        setLoading(true);
+        activeFilters.current = filters;
+        const result = await getMyOrders(1, 20, filters);
+        setOrders(result.data);
+        setTotalCount(result.count);
+        setHasMore(result.hasMore);
+        setPage(1);
+        setLoading(false);
+    }
 
     async function loadMore() {
         setLoadingMore(true);
         const next = page + 1;
-        const result = await getMyOrders(next, 20);
+        const result = await getMyOrders(next, 20, activeFilters.current);
         setOrders(prev => { const ids = new Set(prev.map((o: any) => o.id)); return [...prev, ...result.data.filter((o: any) => !ids.has(o.id))]; });
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(next);
         setLoadingMore(false);
     }
-
-    const filteredOrders = useMemo(() => {
-        return orders.filter((o) => {
-            if (filterType && o.order_type !== filterType) return false;
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                const date = o.order_type === 'weekly' ? (o.week_start_date || '') : (o.delivery_date || '');
-                const hasProduct = o.order_items?.some((item: any) =>
-                    (item.product?.name || '').toLowerCase().includes(q)
-                );
-                if (!date.includes(q) && !o.order_type.includes(q) && !hasProduct) return false;
-            }
-            return true;
-        });
-    }, [orders, searchQuery, filterType]);
 
     async function handleView(order: any) {
         if (selectedOrder?.id === order.id) {
@@ -127,9 +125,10 @@ export default function OrderHistoryPage() {
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
-                            placeholder="Search by date, product..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by date, product... (press Enter)"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') setSearchQuery(searchInput); }}
                             className="form-input text-sm w-full"
                             style={{ minWidth: '220px', paddingLeft: '36px' }}
                         />
@@ -146,9 +145,9 @@ export default function OrderHistoryPage() {
                 </div>
             </div>
 
-            {filteredOrders.length > 0 ? (
+            {orders.length > 0 ? (
                 <div className="space-y-4">
-                    {filteredOrders.map((order: any) => (
+                    {orders.map((order: any) => (
                         <div key={order.id} className="card animate-fade-in">
                             <div className="p-5 border-b border-border flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                                 <div className="flex items-center gap-3">

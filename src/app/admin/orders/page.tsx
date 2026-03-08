@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
 import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw } from 'lucide-react';
@@ -22,44 +22,50 @@ export default function OrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [filterCustomer, setFilterCustomer] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
     const [showOverlapsOnly, setShowOverlapsOnly] = useState(false);
     const [resolvingKey, setResolvingKey] = useState<string | null>(null);
+    const activeFilters = useRef<any>({});
 
     // Editing state
     const [isEditing, setIsEditing] = useState(false);
     const [editItems, setEditItems] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => { loadData(); }, []);
-
-    async function loadData() {
-        setLoading(true);
+    // Load customers + overlaps once on mount
+    useEffect(() => {
+        getCustomers().then(setCustomers);
         setOverlapsLoading(true);
+        getOverlaps().then((ovs) => { setOverlaps(ovs); setOverlapsLoading(false); });
+    }, []);
 
-        // Phase 1: orders + customers — clears the full-screen spinner
-        const [result, custs] = await Promise.all([
-            getOrders({ page: 1, pageSize: 50 }),
-            getCustomers(),
-        ]);
+    // Server-side filter effect — search only commits on Enter, dropdowns fire immediately
+    useEffect(() => {
+        const filters = {
+            customer_id: filterCustomer || undefined,
+            order_type: filterType || undefined,
+            search: searchQuery || undefined,
+        };
+        loadData(filters);
+    }, [filterCustomer, filterType, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function loadData(filters: any = {}) {
+        setLoading(true);
+        activeFilters.current = filters;
+        const result = await getOrders({ ...filters, page: 1, pageSize: 50 });
         setOrders(result.data);
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(1);
-        setCustomers(custs);
         setLoading(false);
-
-        // Phase 2: overlaps — updates in background without blocking the table
-        const ovs = await getOverlaps();
-        setOverlaps(ovs);
-        setOverlapsLoading(false);
     }
 
     async function loadMore() {
         setLoadingMore(true);
         const nextPage = page + 1;
-        const result = await getOrders({ page: nextPage, pageSize: 50 });
+        const result = await getOrders({ ...activeFilters.current, page: nextPage, pageSize: 50 });
         setOrders((prev) => {
             const existingIds = new Set(prev.map((o: any) => o.id));
             return [...prev, ...result.data.filter((o: any) => !existingIds.has(o.id))];
@@ -74,7 +80,7 @@ export default function OrdersPage() {
         if (!confirm('Are you sure you want to delete this order? This cannot be undone.')) return;
         await deleteOrder(orderId);
         setSelectedOrder(null);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     async function handleResolve(ov: any, keep: 'weekly' | 'daily') {
@@ -84,7 +90,7 @@ export default function OrdersPage() {
         setResolvingKey(key);
         await resolveOverlap(ov.customer_id, ov.product_id, ov.delivery_date, keep);
         setResolvingKey(null);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     async function openOrderDetail(orderId: string) {
@@ -147,7 +153,7 @@ export default function OrdersPage() {
         } else {
             setIsEditing(false);
             setSelectedOrder(null);
-            loadData();
+            loadData(activeFilters.current);
         }
         setSaving(false);
     }
@@ -202,23 +208,11 @@ export default function OrdersPage() {
     }
 
     // Filter with search
+    // Only showOverlapsOnly remains client-side; all other filters are server-side
     const filteredOrders = useMemo(() => {
-        return orders.filter((o) => {
-            if (filterCustomer && o.customer_id !== filterCustomer) return false;
-            if (filterType && o.order_type !== filterType) return false;
-
-            if (showOverlapsOnly && !isOverlapping(o)) return false;
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                const customerName = ((o.customer as any)?.name || '').toLowerCase();
-                const date = o.order_type === 'weekly' ? (o.week_start_date || '') : (o.delivery_date || '');
-                if (!customerName.includes(q) && !date.includes(q) && !o.order_type.includes(q)) {
-                    return false;
-                }
-            }
-            return true;
-        });
-    }, [orders, filterCustomer, filterType, showOverlapsOnly, searchQuery, overlapKeySet]);
+        if (!showOverlapsOnly) return orders;
+        return orders.filter((o) => isOverlapping(o));
+    }, [orders, showOverlapsOnly, overlapKeySet]);
 
     if (loading) {
         return (
@@ -247,7 +241,7 @@ export default function OrdersPage() {
                     </p>
                 </div>
                 <button
-                    onClick={loadData}
+                    onClick={() => loadData(activeFilters.current)}
                     disabled={loading}
                     className="btn btn-ghost btn-sm"
                     title="Refresh orders"
@@ -340,9 +334,10 @@ export default function OrdersPage() {
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
-                            placeholder="Search by customer, date..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by customer... (press Enter)"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') setSearchQuery(searchInput); }}
                             className="form-input text-sm w-full"
                             style={{ paddingLeft: '36px' }}
                         />
@@ -371,9 +366,9 @@ export default function OrdersPage() {
                         <option value="weekly">Weekly</option>
                         <option value="daily">Daily</option>
                     </select>
-                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery) && (
+                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery || searchInput) && (
                         <button
-                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchQuery(''); }}
+                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); }}
                             className="btn btn-ghost btn-sm"
                         >
                             <X size={14} /> Clear

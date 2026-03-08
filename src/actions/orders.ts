@@ -218,6 +218,7 @@ export async function getOrders(filters?: {
     order_type?: string;
     date_from?: string;
     date_to?: string;
+    search?: string;
     page?: number;
     pageSize?: number;
 }) {
@@ -229,8 +230,7 @@ export async function getOrders(filters?: {
     let query = supabase
         .from('orders')
         .select('*, customer:users!customer_id(name, email), order_items(id, product_id, delivery_date, quantity)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
+        .order('created_at', { ascending: false });
 
     if (filters?.customer_id) {
         query = query.eq('customer_id', filters.customer_id);
@@ -244,8 +244,20 @@ export async function getOrders(filters?: {
     if (filters?.date_to) {
         query = query.lte('created_at', filters.date_to);
     }
+    if (filters?.search) {
+        const q = filters.search;
+        // Find customer IDs matching the search term
+        const { data: matchingCustomers } = await supabase
+            .from('users').select('id').ilike('name', `%${q}%`);
+        const customerIds = (matchingCustomers ?? []).map((c: any) => c.id);
+        if (customerIds.length > 0) {
+            query = query.or(`order_type.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`);
+        } else {
+            query = query.ilike('order_type', `%${q}%`);
+        }
+    }
 
-    const { data, error, count } = await query;
+    const { data, error, count } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
     return { data: data ?? [], count: count ?? 0, hasMore: (from + pageSize) < (count ?? 0) };
 }
@@ -493,19 +505,45 @@ export async function resolveOverlap(
 
 // ─── Customer Order History ────────────────────────────
 
-export async function getMyOrders(page = 1, pageSize = 20) {
+export async function getMyOrders(
+    page = 1,
+    pageSize = 20,
+    filters: { orderType?: string; search?: string } = {}
+) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { data: [], count: 0, hasMore: false };
 
     const from = (page - 1) * pageSize;
-    const { data, error, count } = await supabase
+
+    let query = supabase
         .from('orders')
         .select('*, order_items(*, product:products(name))', { count: 'exact' })
         .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
+        .order('created_at', { ascending: false });
 
+    if (filters.orderType) query = query.eq('order_type', filters.orderType);
+
+    if (filters.search) {
+        const q = filters.search;
+        // Find order IDs matching product names via subqueries
+        const { data: matchingProducts } = await supabase
+            .from('products').select('id').ilike('name', `%${q}%`);
+        const productIds = (matchingProducts ?? []).map((p: any) => p.id);
+        let orderIdsFromProducts: string[] = [];
+        if (productIds.length > 0) {
+            const { data: matchingItems } = await supabase
+                .from('order_items').select('order_id').in('product_id', productIds);
+            orderIdsFromProducts = [...new Set((matchingItems ?? []).map((i: any) => i.order_id as string))];
+        }
+        if (orderIdsFromProducts.length > 0) {
+            query = query.or(`order_type.ilike.%${q}%,id.in.(${orderIdsFromProducts.join(',')})`);
+        } else {
+            query = query.ilike('order_type', `%${q}%`);
+        }
+    }
+
+    const { data, error, count } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
     return { data: data ?? [], count: count ?? 0, hasMore: (from + pageSize) < (count ?? 0) };
 }

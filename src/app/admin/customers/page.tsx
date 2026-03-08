@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getCustomers, getCustomersPaginated, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts, bulkCreateCustomers } from '@/actions/users';
 import { getProducts } from '@/actions/products';
 import { getTags, getCustomerTags, setCustomerTags } from '@/actions/tags';
@@ -15,7 +15,9 @@ export default function CustomersPage() {
     const [hasMore, setHasMore] = useState(false);
     const [page, setPage] = useState(1);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
     const [search, setSearch] = useState('');
+    const activeFilters = useRef<any>({});
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState<any>(null);
     const [showResetModal, setShowResetModal] = useState<any>(null);
@@ -31,25 +33,34 @@ export default function CustomersPage() {
     const [bulkLoading, setBulkLoading] = useState(false);
     const [bulkResult, setBulkResult] = useState<{ inserted: number; errors: string[] } | null>(null);
 
+    // Load products and tags once on mount
     useEffect(() => {
-        loadData();
+        Promise.all([getProducts(), getTags()]).then(([prods, tgs]) => {
+            setProducts(prods.filter((p: any) => p.active_status));
+            setAllTags(tgs);
+        });
     }, []);
 
-    async function loadData() {
-        const [result, prods, tgs] = await Promise.all([getCustomersPaginated(1, 50), getProducts(), getTags()]);
+    // Server-side search — only commits on Enter key press
+    useEffect(() => {
+        loadData({ search: search || undefined });
+    }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function loadData(filters: any = {}) {
+        setLoading(true);
+        activeFilters.current = filters;
+        const result = await getCustomersPaginated(1, 50, filters);
         setCustomers(result.data);
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(1);
-        setProducts(prods.filter((p: any) => p.active_status));
-        setAllTags(tgs);
         setLoading(false);
     }
 
     async function loadMore() {
         setLoadingMore(true);
         const next = page + 1;
-        const result = await getCustomersPaginated(next, 50);
+        const result = await getCustomersPaginated(next, 50, activeFilters.current);
         setCustomers(prev => { const ids = new Set(prev.map((c: any) => c.id)); return [...prev, ...result.data.filter((c: any) => !ids.has(c.id))]; });
         setTotalCount(result.count);
         setHasMore(result.hasMore);
@@ -69,7 +80,7 @@ export default function CustomersPage() {
         } else {
             setShowCreateModal(false);
             setFormLoading(false);
-            loadData();
+            loadData(activeFilters.current);
         }
     }
 
@@ -82,7 +93,7 @@ export default function CustomersPage() {
             setFormError(result.error);
         } else {
             setShowEditModal(null);
-            loadData();
+            loadData(activeFilters.current);
         }
         setFormLoading(false);
     }
@@ -90,7 +101,7 @@ export default function CustomersPage() {
     async function handleDeactivate(id: string) {
         if (!confirm('Are you sure you want to deactivate this customer?')) return;
         await deactivateCustomer(id);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
@@ -202,14 +213,8 @@ export default function CustomersPage() {
         const result = await bulkCreateCustomers(toInsert);
         setBulkResult(result);
         setBulkLoading(false);
-        if (result.inserted > 0) loadData();
+        if (result.inserted > 0) loadData(activeFilters.current);
     }
-
-    const filteredCustomers = customers.filter(
-        (c) =>
-            c.name.toLowerCase().includes(search.toLowerCase()) ||
-            c.email.toLowerCase().includes(search.toLowerCase())
-    );
 
     if (loading) {
         return (
@@ -234,9 +239,10 @@ export default function CustomersPage() {
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
-                            placeholder="Search customers..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search customers... (press Enter)"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') setSearch(searchInput); }}
                             className="form-input text-sm"
                             style={{ minWidth: '220px', paddingLeft: '36px' }}
                         />
@@ -265,7 +271,7 @@ export default function CustomersPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredCustomers.map((c) => (
+                        {customers.map((c) => (
                             <tr key={c.id}>
                                 <td className="font-bold">{c.name}</td>
                                 <td className="text-muted">{c.email}</td>
@@ -300,7 +306,7 @@ export default function CustomersPage() {
                         ))}
                     </tbody>
                 </table>
-                {filteredCustomers.length === 0 && (
+                {customers.length === 0 && (
                     <div className="p-8 text-center text-muted">No customers found.</div>
                 )}
             </div>

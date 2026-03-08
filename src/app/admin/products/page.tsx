@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getProducts, getProductsPaginated, createProduct, updateProduct, toggleProductStatus, bulkCreateProducts, bulkDeleteProducts } from '@/actions/products';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '@/actions/categories';
 import { getTags, createTag, deleteTag, getProductTags, setProductTags } from '@/actions/tags';
@@ -50,39 +50,47 @@ export default function ProductsPage() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [deleteLoading, setDeleteLoading] = useState(false);
 
+    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [tagFilter, setTagFilter] = useState('all');
+    const activeFilters = useRef<any>({});
 
-    const filteredProducts = useMemo(() => {
-        return products.filter((p) => {
-            if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            if (statusFilter === 'active' && !p.active_status) return false;
-            if (statusFilter === 'inactive' && p.active_status) return false;
-            if (categoryFilter !== 'all' && p.category?.id !== categoryFilter) return false;
-            if (tagFilter !== 'all' && !p.tags?.some((t: any) => t.id === tagFilter)) return false;
-            return true;
+    // Load categories and tags once on mount
+    useEffect(() => {
+        Promise.all([getCategories(), getTags()]).then(([cats, tgs]) => {
+            setCategories(cats);
+            setTags(tgs);
         });
-    }, [products, searchQuery, statusFilter, categoryFilter, tagFilter]);
+    }, []);
 
-    useEffect(() => { loadData(); }, []);
+    // Server-side filter effect — search only commits on Enter, dropdowns fire immediately
+    useEffect(() => {
+        const filters = {
+            search: searchQuery || undefined,
+            status: statusFilter !== 'all' ? statusFilter : undefined,
+            category_id: categoryFilter !== 'all' ? categoryFilter : undefined,
+            tag_id: tagFilter !== 'all' ? tagFilter : undefined,
+        };
+        loadData(filters);
+    }, [searchQuery, statusFilter, categoryFilter, tagFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function loadData() {
-        const [result, cats, tgs] = await Promise.all([getProductsPaginated(1, 50), getCategories(), getTags()]);
+    async function loadData(filters: any = {}) {
+        setLoading(true);
+        activeFilters.current = filters;
+        const result = await getProductsPaginated(1, 50, filters);
         setProducts(result.data);
         setTotalCount(result.count);
         setHasMore(result.hasMore);
         setPage(1);
-        setCategories(cats);
-        setTags(tgs);
         setLoading(false);
     }
 
     async function loadMore() {
         setLoadingMore(true);
         const next = page + 1;
-        const result = await getProductsPaginated(next, 50);
+        const result = await getProductsPaginated(next, 50, activeFilters.current);
         setProducts(prev => { const ids = new Set(prev.map((p: any) => p.id)); return [...prev, ...result.data.filter((p: any) => !ids.has(p.id))]; });
         setTotalCount(result.count);
         setHasMore(result.hasMore);
@@ -108,7 +116,7 @@ export default function ProductsPage() {
         }
         setShowCreateModal(false);
         setSelectedProductTags([]);
-        loadData();
+        loadData(activeFilters.current);
         setFormLoading(false);
     }
 
@@ -139,13 +147,13 @@ export default function ProductsPage() {
         }
         setShowEditModal(null);
         setSelectedProductTags([]);
-        loadData();
+        loadData(activeFilters.current);
         setFormLoading(false);
     }
 
     async function handleToggle(id: string) {
         await toggleProductStatus(id);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     function toggleProductTag(tagId: string) {
@@ -165,10 +173,10 @@ export default function ProductsPage() {
     }
 
     function toggleSelectAll() {
-        if (filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id))) {
+        if (products.length > 0 && products.every((p) => selectedIds.has(p.id))) {
             setSelectedIds(new Set());
         } else {
-            setSelectedIds(new Set(filteredProducts.map((p) => p.id)));
+            setSelectedIds(new Set(products.map((p) => p.id)));
         }
     }
 
@@ -177,7 +185,7 @@ export default function ProductsPage() {
         setDeleteLoading(true);
         await bulkDeleteProducts(Array.from(selectedIds));
         setSelectedIds(new Set());
-        loadData();
+        loadData(activeFilters.current);
         setDeleteLoading(false);
     }
 
@@ -215,7 +223,7 @@ export default function ProductsPage() {
         await deleteCategory(id);
         const cats = await getCategories();
         setCategories(cats);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     // ── Tag management ─────────────────────────────────────────────────────
@@ -238,7 +246,7 @@ export default function ProductsPage() {
         await deleteTag(id);
         const tgs = await getTags();
         setTags(tgs);
-        loadData();
+        loadData(activeFilters.current);
     }
 
     // ── Bulk upload ────────────────────────────────────────────────────────
@@ -324,7 +332,7 @@ export default function ProductsPage() {
         } else {
             setBulkResult({ inserted: result.inserted, skipped });
             setBulkRows([]);
-            loadData();
+            loadData(activeFilters.current);
         }
         setBulkLoading(false);
     }
@@ -339,7 +347,7 @@ export default function ProductsPage() {
         );
     }
 
-    const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
+    const allFilteredSelected = products.length > 0 && products.every((p) => selectedIds.has(p.id));
 
     return (
         <div className="animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
@@ -360,9 +368,10 @@ export default function ProductsPage() {
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                             <input
                                 type="text"
-                                placeholder="Search products..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search products... (press Enter)"
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') setSearchQuery(searchInput); }}
                                 className="form-input text-sm"
                                 style={{ minWidth: '220px', paddingLeft: '36px' }}
                             />
@@ -445,7 +454,7 @@ export default function ProductsPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredProducts.map((p, index) => (
+                        {products.map((p, index) => (
                             <tr key={p.id} className={`${!p.active_status ? 'opacity-50' : ''} ${selectedIds.has(p.id) ? 'bg-blue-50' : ''}`}>
                                 <td>
                                     <input
@@ -492,7 +501,7 @@ export default function ProductsPage() {
                         ))}
                     </tbody>
                 </table>
-                {filteredProducts.length === 0 && (
+                {products.length === 0 && (
                     <div className="p-8 text-center text-muted">No products found.</div>
                 )}
             </div>

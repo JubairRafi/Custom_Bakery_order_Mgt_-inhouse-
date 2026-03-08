@@ -25,14 +25,35 @@ export async function getActiveProducts() {
     return (data ?? []).map(normalizeProduct);
 }
 
-export async function getProductsPaginated(page = 1, pageSize = 50) {
+export async function getProductsPaginated(
+    page = 1,
+    pageSize = 50,
+    filters: { search?: string; status?: string; category_id?: string; tag_id?: string } = {}
+) {
     const supabase = await createClient();
     const from = (page - 1) * pageSize;
-    const { data, error, count } = await supabase
+
+    // Handle tag filter via subquery (product_tags join can't be filtered directly)
+    if (filters.tag_id) {
+        const { data: tagLinks } = await supabase
+            .from('product_tags').select('product_id').eq('tag_id', filters.tag_id);
+        const ids = (tagLinks ?? []).map((t: any) => t.product_id);
+        if (ids.length === 0) return { data: [], count: 0, hasMore: false };
+        filters = { ...filters, _productIds: ids } as any;
+    }
+
+    let query = supabase
         .from('products')
         .select('*, category:product_categories(id, name), tags:product_tags(tag:tags(id, name))', { count: 'exact' })
-        .order('display_order', { ascending: true })
-        .range(from, from + pageSize - 1);
+        .order('display_order', { ascending: true });
+
+    if (filters.search) query = query.ilike('name', `%${filters.search}%`);
+    if (filters.status === 'active') query = query.eq('active_status', true);
+    if (filters.status === 'inactive') query = query.eq('active_status', false);
+    if (filters.category_id) query = query.eq('category_id', filters.category_id);
+    if ((filters as any)._productIds) query = query.in('id', (filters as any)._productIds);
+
+    const { data, error, count } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
     return {
         data: (data ?? []).map(normalizeProduct),

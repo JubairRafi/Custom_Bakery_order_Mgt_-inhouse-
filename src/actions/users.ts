@@ -107,15 +107,25 @@ export async function resetCustomerPassword(userId: string, newPassword: string)
     return { success: true };
 }
 
-export async function getCustomersPaginated(page = 1, pageSize = 50) {
+export async function getCustomersPaginated(
+    page = 1,
+    pageSize = 50,
+    filters: { search?: string } = {}
+) {
     const supabase = await createClient();
     const from = (page - 1) * pageSize;
-    const { data, error, count } = await supabase
+
+    let query = supabase
         .from('users')
         .select('*', { count: 'exact' })
         .eq('role', 'customer')
-        .order('name')
-        .range(from, from + pageSize - 1);
+        .order('name');
+
+    if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+    }
+
+    const { data, error, count } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
     return {
         data: data ?? [],

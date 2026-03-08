@@ -30,6 +30,7 @@ export default function WeeklyOrderPage() {
     const [error, setError] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
+    const [productSearch, setProductSearch] = useState('');
     const [loadingLastWeek, setLoadingLastWeek] = useState(false);
     const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
     const [defaultProds, setDefaultProds] = useState<Product[]>([]);
@@ -321,9 +322,9 @@ export default function WeeklyOrderPage() {
 
     const dates = getDatesForWeek(selectedMonday);
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const availableToAdd = products.filter(
-        (p) => !orderRows.some((r) => r.product_id === p.id)
-    );
+    const availableToAdd = products
+        .filter((p) => !orderRows.some((r) => r.product_id === p.id))
+        .filter((p) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()));
 
     return (
         <div className="animate-fade-in">
@@ -487,16 +488,24 @@ export default function WeeklyOrderPage() {
                     </div>
 
                     {/* Add Product Button */}
-                    {availableToAdd.length > 0 && (
+                    {products.some((p) => !orderRows.some((r) => r.product_id === p.id)) && (
                         <div className="mb-6">
                             {showProductPicker ? (
                                 <div className="card p-4 animate-fade-in">
                                     <div className="flex items-center justify-between mb-3">
                                         <p className="font-semibold text-sm">Add Product</p>
-                                        <button onClick={() => setShowProductPicker(false)} className="text-muted hover:text-foreground">
+                                        <button onClick={() => { setShowProductPicker(false); setProductSearch(''); }} className="text-muted hover:text-foreground">
                                             <X size={18} />
                                         </button>
                                     </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search products..."
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        className="form-input mb-3"
+                                        autoFocus
+                                    />
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         {availableToAdd.map((p) => (
                                             <button
@@ -508,9 +517,12 @@ export default function WeeklyOrderPage() {
                                             </button>
                                         ))}
                                     </div>
+                                    {availableToAdd.length === 0 && (
+                                        <p className="text-sm text-muted">No products found.</p>
+                                    )}
                                 </div>
                             ) : (
-                                <button onClick={() => setShowProductPicker(true)} className="btn btn-outline btn-sm">
+                                <button onClick={() => { setShowProductPicker(true); setProductSearch(''); }} className="btn btn-outline btn-sm">
                                     <Plus size={16} /> Add Product
                                 </button>
                             )}

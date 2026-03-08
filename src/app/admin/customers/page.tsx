@@ -18,6 +18,7 @@ export default function CustomersPage() {
     const [showDefaultsModal, setShowDefaultsModal] = useState<any>(null);
     const [selectedDefaults, setSelectedDefaults] = useState<string[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [productSearch, setProductSearch] = useState('');
     const [formError, setFormError] = useState('');
     const [formLoading, setFormLoading] = useState(false);
 
@@ -85,6 +86,7 @@ export default function CustomersPage() {
 
     async function openDefaultsModal(customer: any) {
         setShowDefaultsModal(customer);
+        setProductSearch('');
         setFormLoading(true);
         const [defaults, tagIds] = await Promise.all([
             getCustomerDefaultProducts(customer.id),
@@ -314,8 +316,17 @@ export default function CustomersPage() {
                             <>
                                 {/* Default products */}
                                 <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Default Products</p>
+                                <input
+                                    type="text"
+                                    placeholder="Search products..."
+                                    value={productSearch}
+                                    onChange={(e) => setProductSearch(e.target.value)}
+                                    className="form-input mb-2"
+                                />
                                 <div className="space-y-1 max-h-48 overflow-y-auto mb-1 border rounded-lg p-2">
-                                    {products.map((p: any) => (
+                                    {products
+                                        .filter((p: any) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                                        .map((p: any) => (
                                         <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                                             <input
                                                 type="checkbox"

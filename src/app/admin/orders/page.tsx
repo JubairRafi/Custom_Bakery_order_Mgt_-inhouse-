@@ -337,13 +337,14 @@ export default function OrdersPage() {
             <div className="card p-4 mb-6">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="relative flex-1" style={{ minWidth: '200px', maxWidth: '320px' }}>
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
                             placeholder="Search by customer, date..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="form-input pl-9 py-2 text-sm w-full"
+                            className="form-input text-sm w-full"
+                            style={{ paddingLeft: '36px' }}
                         />
                     </div>
                     <div className="flex items-center gap-2">
@@ -352,7 +353,7 @@ export default function OrdersPage() {
                     <select
                         value={filterCustomer}
                         onChange={(e) => setFilterCustomer(e.target.value)}
-                        className="form-input py-2 text-sm"
+                        className="form-input py-1.5 text-sm"
                         style={{ minWidth: '180px' }}
                     >
                         <option value="">All Customers</option>
@@ -363,7 +364,7 @@ export default function OrdersPage() {
                     <select
                         value={filterType}
                         onChange={(e) => setFilterType(e.target.value)}
-                        className="form-input py-2 text-sm"
+                        className="form-input py-1.5 text-sm"
                         style={{ minWidth: '140px' }}
                     >
                         <option value="">All Types</option>
@@ -466,179 +467,179 @@ export default function OrdersPage() {
                             </div>
                         )}
                         {!detailLoading && <>
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold flex items-center gap-2">
-                                {isEditing ? (
-                                    <><Edit size={18} className="text-primary" /> Edit Order</>
-                                ) : (
-                                    <><CalendarDays size={18} className="text-primary" /> Order Details</>
-                                )}
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                {!isEditing && !isOrderPast(selectedOrder) ? (
-                                    <button onClick={startEditing} className="btn btn-primary btn-sm">
-                                        <Edit size={14} /> Edit
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    {isEditing ? (
+                                        <><Edit size={18} className="text-primary" /> Edit Order</>
+                                    ) : (
+                                        <><CalendarDays size={18} className="text-primary" /> Order Details</>
+                                    )}
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    {!isEditing && !isOrderPast(selectedOrder) ? (
+                                        <button onClick={startEditing} className="btn btn-primary btn-sm">
+                                            <Edit size={14} /> Edit
+                                        </button>
+                                    ) : isEditing ? (
+                                        <>
+                                            <button onClick={() => setIsEditing(false)} className="btn btn-ghost btn-sm">
+                                                Cancel
+                                            </button>
+                                            <button onClick={handleSaveEdit} disabled={saving} className="btn btn-primary btn-sm">
+                                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+                                            </button>
+                                        </>
+                                    ) : null}
+                                    <button onClick={() => { setSelectedOrder(null); setIsEditing(false); }} className="text-muted hover:text-foreground ml-1">
+                                        <X size={20} />
                                     </button>
-                                ) : isEditing ? (
-                                    <>
-                                        <button onClick={() => setIsEditing(false)} className="btn btn-ghost btn-sm">
-                                            Cancel
-                                        </button>
-                                        <button onClick={handleSaveEdit} disabled={saving} className="btn btn-primary btn-sm">
-                                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
-                                        </button>
-                                    </>
-                                ) : null}
-                                <button onClick={() => { setSelectedOrder(null); setIsEditing(false); }} className="text-muted hover:text-foreground ml-1">
-                                    <X size={20} />
-                                </button>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Order Info */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 text-sm">
-                            <div>
-                                <span className="text-muted text-xs">Customer</span>
-                                <p className="font-bold">{(selectedOrder.customer as any)?.name}</p>
+                            {/* Order Info */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 text-sm">
+                                <div>
+                                    <span className="text-muted text-xs">Customer</span>
+                                    <p className="font-bold">{(selectedOrder.customer as any)?.name}</p>
+                                </div>
+                                <div>
+                                    <span className="text-muted text-xs">Type</span>
+                                    <p><span className={`badge ${selectedOrder.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>{selectedOrder.order_type}</span></p>
+                                </div>
+                                <div>
+                                    <span className="text-muted text-xs">Date</span>
+                                    <p className="font-bold">
+                                        {selectedOrder.order_type === 'weekly'
+                                            ? `Week of ${selectedOrder.week_start_date}`
+                                            : selectedOrder.delivery_date}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-muted text-xs">Submitted</span>
+                                    <p className="font-bold">{format(new Date(selectedOrder.created_at), 'MMM dd, HH:mm')}</p>
+                                </div>
                             </div>
-                            <div>
-                                <span className="text-muted text-xs">Type</span>
-                                <p><span className={`badge ${selectedOrder.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>{selectedOrder.order_type}</span></p>
-                            </div>
-                            <div>
-                                <span className="text-muted text-xs">Date</span>
-                                <p className="font-bold">
-                                    {selectedOrder.order_type === 'weekly'
-                                        ? `Week of ${selectedOrder.week_start_date}`
-                                        : selectedOrder.delivery_date}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-muted text-xs">Submitted</span>
-                                <p className="font-bold">{format(new Date(selectedOrder.created_at), 'MMM dd, HH:mm')}</p>
-                            </div>
-                        </div>
 
-                        {/* Weekly Grid View */}
-                        {selectedOrder.order_type === 'weekly' && weeklyGridData ? (
-                            <div className="overflow-x-auto">
-                                <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                            {/* Weekly Grid View */}
+                            {selectedOrder.order_type === 'weekly' && weeklyGridData ? (
+                                <div className="overflow-x-auto">
+                                    <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ minWidth: '160px' }}>Product</th>
+                                                {weeklyGridData.days.map((day, i) => (
+                                                    <th key={day} className="text-center" style={{ minWidth: '70px' }}>
+                                                        <div>{DAY_LABELS[i]}</div>
+                                                        <div style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.7 }}>
+                                                            {format(parseISO(day), 'dd/MM')}
+                                                        </div>
+                                                    </th>
+                                                ))}
+                                                <th className="text-center" style={{ minWidth: '60px' }}>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {weeklyGridData.grid.map((row) => {
+                                                const rowTotal = Object.values(row.quantities).reduce((sum, q) => sum + q.qty, 0);
+                                                return (
+                                                    <tr key={row.product_id}>
+                                                        <td className="font-medium">{row.product_name}</td>
+                                                        {weeklyGridData.days.map((day) => {
+                                                            const cell = row.quantities[day];
+                                                            if (isEditing) {
+                                                                const editItem = editItems.find(
+                                                                    (ei) => ei.product_id === row.product_id && ei.delivery_date === day
+                                                                );
+                                                                return (
+                                                                    <td key={day} className="text-center p-1">
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={editItem?.quantity ?? 0}
+                                                                            onChange={(e) => {
+                                                                                if (editItem) {
+                                                                                    updateEditQuantity(editItem.id, parseInt(e.target.value) || 0);
+                                                                                }
+                                                                            }}
+                                                                            className="form-input text-center py-1 px-1"
+                                                                            style={{ width: '55px', fontSize: '0.85rem' }}
+                                                                        />
+                                                                    </td>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <td key={day} className="text-center">
+                                                                    {cell.qty > 0 ? (
+                                                                        <span className="font-bold text-primary">{cell.qty}</span>
+                                                                    ) : (
+                                                                        <span className="text-gray-300">—</span>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className="text-center font-bold" style={{ background: '#f1f5f9' }}>
+                                                            {isEditing
+                                                                ? editItems
+                                                                    .filter((ei) => ei.product_id === row.product_id)
+                                                                    .reduce((sum, ei) => sum + ei.quantity, 0)
+                                                                : rowTotal}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                /* Daily order — simple table */
+                                <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th style={{ minWidth: '160px' }}>Product</th>
-                                            {weeklyGridData.days.map((day, i) => (
-                                                <th key={day} className="text-center" style={{ minWidth: '70px' }}>
-                                                    <div>{DAY_LABELS[i]}</div>
-                                                    <div style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.7 }}>
-                                                        {format(parseISO(day), 'dd/MM')}
-                                                    </div>
-                                                </th>
-                                            ))}
-                                            <th className="text-center" style={{ minWidth: '60px' }}>Total</th>
+                                            <th>Product</th>
+                                            <th>Delivery Date</th>
+                                            <th className="text-center">Quantity</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {weeklyGridData.grid.map((row) => {
-                                            const rowTotal = Object.values(row.quantities).reduce((sum, q) => sum + q.qty, 0);
-                                            return (
-                                                <tr key={row.product_id}>
-                                                    <td className="font-medium">{row.product_name}</td>
-                                                    {weeklyGridData.days.map((day) => {
-                                                        const cell = row.quantities[day];
-                                                        if (isEditing) {
-                                                            const editItem = editItems.find(
-                                                                (ei) => ei.product_id === row.product_id && ei.delivery_date === day
-                                                            );
-                                                            return (
-                                                                <td key={day} className="text-center p-1">
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        value={editItem?.quantity ?? 0}
-                                                                        onChange={(e) => {
-                                                                            if (editItem) {
-                                                                                updateEditQuantity(editItem.id, parseInt(e.target.value) || 0);
-                                                                            }
-                                                                        }}
-                                                                        className="form-input text-center py-1 px-1"
-                                                                        style={{ width: '55px', fontSize: '0.85rem' }}
-                                                                    />
-                                                                </td>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <td key={day} className="text-center">
-                                                                {cell.qty > 0 ? (
-                                                                    <span className="font-bold text-primary">{cell.qty}</span>
-                                                                ) : (
-                                                                    <span className="text-gray-300">—</span>
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className="text-center font-bold" style={{ background: '#f1f5f9' }}>
-                                                        {isEditing
-                                                            ? editItems
-                                                                .filter((ei) => ei.product_id === row.product_id)
-                                                                .reduce((sum, ei) => sum + ei.quantity, 0)
-                                                            : rowTotal}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
+                                        {(isEditing ? editItems : selectedOrder.order_items)?.map((item: any) => (
+                                            <tr key={item.id}>
+                                                <td className="font-medium">{item.product_name || item.product?.name || 'Unknown'}</td>
+                                                <td>{item.delivery_date}</td>
+                                                <td className="text-center">
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={item.quantity}
+                                                            onChange={(e) => updateEditQuantity(item.id, parseInt(e.target.value) || 0)}
+                                                            className="form-input text-center py-1"
+                                                            style={{ width: '70px', fontSize: '0.85rem' }}
+                                                        />
+                                                    ) : (
+                                                        <span className="font-bold text-primary">{item.quantity}</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
-                            </div>
-                        ) : (
-                            /* Daily order — simple table */
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Delivery Date</th>
-                                        <th className="text-center">Quantity</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(isEditing ? editItems : selectedOrder.order_items)?.map((item: any) => (
-                                        <tr key={item.id}>
-                                            <td className="font-medium">{item.product_name || item.product?.name || 'Unknown'}</td>
-                                            <td>{item.delivery_date}</td>
-                                            <td className="text-center">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateEditQuantity(item.id, parseInt(e.target.value) || 0)}
-                                                        className="form-input text-center py-1"
-                                                        style={{ width: '70px', fontSize: '0.85rem' }}
-                                                    />
-                                                ) : (
-                                                    <span className="font-bold text-primary">{item.quantity}</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                            )}
 
-                        {/* Footer actions */}
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                            <button
-                                onClick={() => handleDelete(selectedOrder.id)}
-                                className="btn btn-ghost btn-sm text-danger"
-                            >
-                                <Trash2 size={14} /> Delete Order
-                            </button>
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm text-muted">
-                                    ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
-                                </span>
+                            {/* Footer actions */}
+                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                                <button
+                                    onClick={() => handleDelete(selectedOrder.id)}
+                                    className="btn btn-ghost btn-sm text-danger"
+                                >
+                                    <Trash2 size={14} /> Delete Order
+                                </button>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-muted">
+                                        ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
+                                    </span>
+                                </div>
                             </div>
-                        </div>
                         </>}
                     </div>
                 </div>

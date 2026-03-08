@@ -364,7 +364,7 @@ export default function ReportsPage() {
                                 type="date"
                                 value={selectedDate}
                                 onChange={(e) => setSelectedDate(e.target.value)}
-                                className="form-input py-2 text-sm"
+                                className="form-input py-1.5 text-sm"
                                 style={{ maxWidth: '200px' }}
                             />
                             <div className="flex gap-2 ml-auto flex-wrap">
@@ -386,7 +386,7 @@ export default function ReportsPage() {
                             <select
                                 value={filterCustomer}
                                 onChange={(e) => setFilterCustomer(e.target.value)}
-                                className="form-input py-2 text-sm"
+                                className="form-input py-1.5 text-sm"
                                 style={{ minWidth: '180px' }}
                             >
                                 <option value="">All Customers</option>
@@ -418,7 +418,7 @@ export default function ReportsPage() {
                             <select
                                 value={filterCustomer}
                                 onChange={(e) => setFilterCustomer(e.target.value)}
-                                className="form-input py-2 text-sm ml-auto"
+                                className="form-input py-1.5 text-sm ml-auto"
                                 style={{ minWidth: '180px' }}
                             >
                                 <option value="">All Customers</option>
@@ -438,7 +438,7 @@ export default function ReportsPage() {
                                     type="date"
                                     value={custStartDate}
                                     onChange={(e) => setCustStartDate(e.target.value)}
-                                    className="form-input py-2 text-sm"
+                                    className="form-input py-1.5 text-sm"
                                     style={{ maxWidth: '170px' }}
                                 />
                             </div>
@@ -448,7 +448,7 @@ export default function ReportsPage() {
                                     type="date"
                                     value={custEndDate}
                                     onChange={(e) => setCustEndDate(e.target.value)}
-                                    className="form-input py-2 text-sm"
+                                    className="form-input py-1.5 text-sm"
                                     style={{ maxWidth: '170px' }}
                                 />
                             </div>
@@ -466,7 +466,7 @@ export default function ReportsPage() {
                                 type="date"
                                 value={wholesaleDate}
                                 onChange={(e) => setWholesaleDate(e.target.value)}
-                                className="form-input py-2 text-sm"
+                                className="form-input py-1.5 text-sm"
                                 style={{ maxWidth: '200px' }}
                             />
                             <div className="flex gap-2 ml-auto flex-wrap">

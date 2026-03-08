@@ -257,129 +257,129 @@ export default function DailyOrderPage() {
                     : canSubmit;
                 const allProductsLocked = orderRows.length > 0 && orderRows.every(row => isRowLocked(row.product_id));
                 return (existingOrderId || anyUnlocked) && (
-                <>
-                    <div className="card mb-6">
-                        <div className="p-4 border-b border-border">
-                            <h3 className="font-semibold text-foreground">Products</h3>
+                    <>
+                        <div className="card mb-6">
+                            <div className="p-4 border-b border-border">
+                                <h3 className="font-semibold text-foreground">Products</h3>
+                            </div>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th style={{ width: '140px' }}>Quantity</th>
+                                        <th style={{ width: '60px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {orderRows.map((row) => {
+                                        const locked = isRowLocked(row.product_id);
+                                        return (
+                                            <tr key={row.product_id}>
+                                                <td className="font-medium">
+                                                    {row.product_name}
+                                                    {locked && (
+                                                        <span className="ml-2 inline-flex items-center gap-1 text-xs text-danger">
+                                                            <Lock size={10} /> Locked
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={row.quantity || ''}
+                                                        onChange={(e) =>
+                                                            updateQuantity(row.product_id, parseInt(e.target.value) || 0)
+                                                        }
+                                                        placeholder={locked ? '—' : '0'}
+                                                        disabled={locked}
+                                                        className="form-input text-center py-1.5"
+                                                        style={locked ? { width: '100px', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : { width: '100px' }}
+                                                    />
+                                                </td>
+                                                <td>
+                                                    {!locked && (
+                                                        <button
+                                                            onClick={() => removeProduct(row.product_id)}
+                                                            className="text-danger hover:bg-red-50 rounded p-1"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr style={{ background: '#f1f5f9' }}>
+                                        <td className="font-bold">Total</td>
+                                        <td className="font-bold text-primary text-center">{getTotal()}</td>
+                                        <td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th style={{ width: '140px' }}>Quantity</th>
-                                    <th style={{ width: '60px' }}></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {orderRows.map((row) => {
-                                    const locked = isRowLocked(row.product_id);
-                                    return (
-                                        <tr key={row.product_id}>
-                                            <td className="font-medium">
-                                                {row.product_name}
-                                                {locked && (
-                                                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-danger">
-                                                        <Lock size={10} /> Locked
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={row.quantity || ''}
-                                                    onChange={(e) =>
-                                                        updateQuantity(row.product_id, parseInt(e.target.value) || 0)
-                                                    }
-                                                    placeholder={locked ? '—' : '0'}
-                                                    disabled={locked}
-                                                    className="form-input text-center py-2"
-                                                    style={locked ? { width: '100px', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : { width: '100px' }}
-                                                />
-                                            </td>
-                                            <td>
-                                                {!locked && (
-                                                    <button
-                                                        onClick={() => removeProduct(row.product_id)}
-                                                        className="text-danger hover:bg-red-50 rounded p-1"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                <tr style={{ background: '#f1f5f9' }}>
-                                    <td className="font-bold">Total</td>
-                                    <td className="font-bold text-primary text-center">{getTotal()}</td>
-                                    <td></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
 
-                    {/* Add Product */}
-                    {products.some((p) => !orderRows.some((r) => r.product_id === p.id)) && (
-                        <div className="mb-6">
-                            {showProductPicker ? (
-                                <div className="card p-4 animate-fade-in">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <p className="font-semibold text-sm">Add Product</p>
-                                        <button onClick={() => { setShowProductPicker(false); setProductSearch(''); }} className="text-muted hover:text-foreground">
-                                            <X size={18} />
-                                        </button>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Search products..."
-                                        value={productSearch}
-                                        onChange={(e) => setProductSearch(e.target.value)}
-                                        className="form-input mb-3"
-                                        autoFocus
-                                    />
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                        {availableToAdd.map((p) => (
-                                            <button
-                                                key={p.id}
-                                                onClick={() => addProduct(p)}
-                                                className="btn btn-outline btn-sm text-left"
-                                            >
-                                                <Plus size={14} /> {p.name}
+                        {/* Add Product */}
+                        {products.some((p) => !orderRows.some((r) => r.product_id === p.id)) && (
+                            <div className="mb-6">
+                                {showProductPicker ? (
+                                    <div className="card p-4 animate-fade-in">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="font-semibold text-sm">Add Product</p>
+                                            <button onClick={() => { setShowProductPicker(false); setProductSearch(''); }} className="text-muted hover:text-foreground">
+                                                <X size={18} />
                                             </button>
-                                        ))}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            value={productSearch}
+                                            onChange={(e) => setProductSearch(e.target.value)}
+                                            className="form-input mb-3"
+                                            autoFocus
+                                        />
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                            {availableToAdd.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => addProduct(p)}
+                                                    className="btn btn-outline btn-sm text-left"
+                                                >
+                                                    <Plus size={14} /> {p.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {availableToAdd.length === 0 && (
+                                            <p className="text-sm text-muted">No products found.</p>
+                                        )}
                                     </div>
-                                    {availableToAdd.length === 0 && (
-                                        <p className="text-sm text-muted">No products found.</p>
-                                    )}
-                                </div>
-                            ) : (
-                                <button onClick={() => { setShowProductPicker(true); setProductSearch(''); }} className="btn btn-outline btn-sm">
-                                    <Plus size={16} /> Add Product
-                                </button>
-                            )}
-                        </div>
-                    )}
+                                ) : (
+                                    <button onClick={() => { setShowProductPicker(true); setProductSearch(''); }} className="btn btn-outline btn-sm">
+                                        <Plus size={16} /> Add Product
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
-                    {/* Submit */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-muted">
-                            <Info size={14} />
-                            {existingOrderId && allProductsLocked
-                                ? 'All products for this date are past their cutoff and cannot be modified.'
-                                : existingOrderId
-                                ? 'Locked products cannot be changed; others are still editable.'
-                                : 'Products past their cutoff are locked.'}
+                        {/* Submit */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-muted">
+                                <Info size={14} />
+                                {existingOrderId && allProductsLocked
+                                    ? 'All products for this date are past their cutoff and cannot be modified.'
+                                    : existingOrderId
+                                        ? 'Locked products cannot be changed; others are still editable.'
+                                        : 'Products past their cutoff are locked.'}
+                            </div>
+                            <button
+                                onClick={() => setShowConfirmModal(true)}
+                                disabled={!hasAnyQuantity() || (!!existingOrderId && allProductsLocked)}
+                                className="btn btn-success"
+                            >
+                                <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit'}
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setShowConfirmModal(true)}
-                            disabled={!hasAnyQuantity() || (!!existingOrderId && allProductsLocked)}
-                            className="btn btn-success"
-                        >
-                            <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit'}
-                        </button>
-                    </div>
-                </>
+                    </>
                 );
             })()}
 

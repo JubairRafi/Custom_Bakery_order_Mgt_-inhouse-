@@ -107,20 +107,20 @@ export default function OrderHistoryPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
                             placeholder="Search by date, product..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="form-input pl-9 py-2 text-sm"
-                            style={{ minWidth: '220px' }}
+                            className="form-input text-sm w-full"
+                            style={{ minWidth: '220px', paddingLeft: '36px' }}
                         />
                     </div>
                     <select
                         value={filterType}
                         onChange={(e) => setFilterType(e.target.value)}
-                        className="form-input py-2 text-sm"
+                        className="form-input py-1.5 text-sm"
                     >
                         <option value="">All Types</option>
                         <option value="weekly">Weekly</option>

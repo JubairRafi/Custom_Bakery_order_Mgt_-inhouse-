@@ -343,7 +343,7 @@ export default function WeeklyOrderPage() {
                     <select
                         value={selectedMonday}
                         onChange={(e) => handleMondayChange(e.target.value)}
-                        className="form-input py-2 px-4 text-sm"
+                        className="form-input py-1.5 px-4 text-sm"
                         style={{ minWidth: '200px' }}
                     >
                         {availableMondays.map((m) => (
@@ -534,7 +534,7 @@ export default function WeeklyOrderPage() {
                         const allDaysLocked = selectedMonday && orderRows.length > 0
                             ? getDatesForWeek(selectedMonday).every(date =>
                                 orderRows.every(row => isRowDayLocked(date, row))
-                              )
+                            )
                             : false;
                         return (
                             <div className="flex items-center justify-between">
@@ -543,8 +543,8 @@ export default function WeeklyOrderPage() {
                                     {existingOrderId && allDaysLocked
                                         ? 'All days in this week are past their cutoff and cannot be edited.'
                                         : existingOrderId
-                                        ? 'Past-due days are locked and cannot be modified.'
-                                        : 'Review your order before submitting.'}
+                                            ? 'Past-due days are locked and cannot be modified.'
+                                            : 'Review your order before submitting.'}
                                 </div>
                                 <button
                                     onClick={() => setShowConfirmModal(true)}

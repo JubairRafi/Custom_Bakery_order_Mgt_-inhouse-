@@ -213,14 +213,14 @@ export default function CustomersPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                         <input
                             type="text"
                             placeholder="Search customers..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="form-input pl-9 py-2 text-sm"
-                            style={{ minWidth: '220px' }}
+                            className="form-input text-sm"
+                            style={{ minWidth: '220px', paddingLeft: '36px' }}
                         />
                     </div>
                     <button onClick={() => { setShowBulkModal(true); setBulkRows([]); setBulkError(''); setBulkResult(null); }} className="btn btn-outline btn-sm">
@@ -436,16 +436,16 @@ export default function CustomersPage() {
                                     {products
                                         .filter((p: any) => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
                                         .map((p: any) => (
-                                        <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedDefaults.includes(p.id)}
-                                                onChange={() => toggleDefault(p.id)}
-                                                className="w-4 h-4 rounded"
-                                            />
-                                            <span className="text-sm font-medium">{p.name}</span>
-                                        </label>
-                                    ))}
+                                            <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedDefaults.includes(p.id)}
+                                                    onChange={() => toggleDefault(p.id)}
+                                                    className="w-4 h-4 rounded"
+                                                />
+                                                <span className="text-sm font-medium">{p.name}</span>
+                                            </label>
+                                        ))}
                                 </div>
                                 <p className="text-xs text-muted mb-4">{selectedDefaults.length} product(s) selected</p>
 
@@ -586,7 +586,7 @@ export default function CustomersPage() {
                                                             <td>
                                                                 {isDupe ? <span className="badge badge-warning text-xs">skip</span>
                                                                     : isMissing ? <span className="badge badge-danger text-xs">skip</span>
-                                                                    : <span className="badge badge-success text-xs">new</span>}
+                                                                        : <span className="badge badge-success text-xs">new</span>}
                                                             </td>
                                                         </tr>
                                                     );

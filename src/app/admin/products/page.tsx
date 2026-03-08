@@ -261,10 +261,10 @@ export default function ProductsPage() {
                 const rows = raw.slice(1)
                     .filter((r) => String(r[0] ?? '').trim() && !String(r[0]).startsWith('──'))
                     .map((r) => ({
-                        name:     String(r[0] ?? '').trim(),
+                        name: String(r[0] ?? '').trim(),
                         category: String(r[1] ?? '').trim(),
-                        active:   String(r[2] ?? 'Yes').trim(),
-                        tags:     String(r[3] ?? '').trim(),
+                        active: String(r[2] ?? 'Yes').trim(),
+                        tags: String(r[3] ?? '').trim(),
                     }));
                 if (rows.length === 0) {
                     setBulkError('No valid rows found. Make sure the file has product names in column A.');
@@ -289,13 +289,13 @@ export default function ProductsPage() {
         const toInsert = bulkRows
             .filter((r) => !existingNames.has(r.name.toLowerCase()))
             .map((r) => ({
-                name:          r.name,
-                category_id:   catMap.get(r.category.toLowerCase()) ?? null,
+                name: r.name,
+                category_id: catMap.get(r.category.toLowerCase()) ?? null,
                 active_status: r.active.toLowerCase() !== 'no',
                 tag_ids: r.tags
                     ? r.tags.split(',').map((t) => t.trim()).filter(Boolean)
-                          .map((name) => tagMap.get(name.toLowerCase()))
-                          .filter((id): id is string => Boolean(id))
+                        .map((name) => tagMap.get(name.toLowerCase()))
+                        .filter((id): id is string => Boolean(id))
                     : [],
             }));
 
@@ -339,20 +339,20 @@ export default function ProductsPage() {
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
                         <div className="relative">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                             <input
                                 type="text"
                                 placeholder="Search products..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="form-input pl-9 py-2 text-sm"
-                                style={{ minWidth: '220px' }}
+                                className="form-input text-sm"
+                                style={{ minWidth: '220px', paddingLeft: '36px' }}
                             />
                         </div>
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="form-input py-2 text-sm"
+                            className="form-input py-1.5 text-sm"
                         >
                             <option value="all">All Status</option>
                             <option value="active">Active</option>
@@ -362,7 +362,7 @@ export default function ProductsPage() {
                             <select
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
-                                className="form-input py-2 text-sm"
+                                className="form-input py-1.5 text-sm"
                             >
                                 <option value="all">All Categories</option>
                                 {categories.map((c) => (
@@ -374,7 +374,7 @@ export default function ProductsPage() {
                             <select
                                 value={tagFilter}
                                 onChange={(e) => setTagFilter(e.target.value)}
-                                className="form-input py-2 text-sm"
+                                className="form-input py-1.5 text-sm"
                             >
                                 <option value="all">All Tags</option>
                                 {tags.map((t) => (
@@ -446,7 +446,7 @@ export default function ProductsPage() {
                                             {p.tags.map((t: any) => (
                                                 <span key={t.id} className="badge badge-info text-xs">{t.name}</span>
                                             ))}
-                                          </div>
+                                        </div>
                                         : <span className="text-muted text-sm">—</span>
                                     }
                                 </td>

@@ -167,8 +167,11 @@ export default function CustomersPage() {
                         <tr>
                             <th>Name</th>
                             <th>Email</th>
+                            <th>Delivery Address</th>
+                            <th>Point of Contact</th>
+                            <th>Contact Number</th>
+                            <th>Delivery Time</th>
                             <th>Status</th>
-                            <th>Created</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -177,12 +180,15 @@ export default function CustomersPage() {
                             <tr key={c.id}>
                                 <td className="font-bold">{c.name}</td>
                                 <td className="text-muted">{c.email}</td>
+                                <td className="text-sm">{c.delivery_address || <span className="text-muted">—</span>}</td>
+                                <td className="text-sm">{c.point_of_contact || <span className="text-muted">—</span>}</td>
+                                <td className="text-sm">{c.contact_number || <span className="text-muted">—</span>}</td>
+                                <td className="text-sm">{c.delivery_time || <span className="text-muted">—</span>}</td>
                                 <td>
                                     <span className={`badge ${c.active_status ? 'badge-success' : 'badge-danger'}`}>
                                         {c.active_status ? 'Active' : 'Inactive'}
                                     </span>
                                 </td>
-                                <td className="text-muted text-sm">{new Date(c.created_at).toLocaleDateString()}</td>
                                 <td>
                                     <div className="flex items-center gap-1">
                                         <button onClick={() => { setShowEditModal(c); setFormError(''); }} className="btn btn-ghost btn-sm" title="Edit">
@@ -232,6 +238,22 @@ export default function CustomersPage() {
                                 <label className="form-label">Password</label>
                                 <input name="password" type="password" required minLength={6} className="form-input" placeholder="Minimum 6 characters" />
                             </div>
+                            <div className="form-group">
+                                <label className="form-label">Delivery Address</label>
+                                <input name="delivery_address" className="form-input" placeholder="Delivery address" />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Point of Contact</label>
+                                <input name="point_of_contact" className="form-input" placeholder="Contact person name" />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Contact Number</label>
+                                <input name="contact_number" className="form-input" placeholder="Phone number" />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Delivery Time</label>
+                                <input name="delivery_time" className="form-input" placeholder="e.g. 7h, <12h, 6h30" />
+                            </div>
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-ghost">Cancel</button>
                                 <button type="submit" disabled={formLoading} className="btn btn-primary">
@@ -263,6 +285,22 @@ export default function CustomersPage() {
                                     <option value="true">Active</option>
                                     <option value="false">Inactive</option>
                                 </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Delivery Address</label>
+                                <input name="delivery_address" className="form-input" defaultValue={showEditModal.delivery_address ?? ''} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Point of Contact</label>
+                                <input name="point_of_contact" className="form-input" defaultValue={showEditModal.point_of_contact ?? ''} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Contact Number</label>
+                                <input name="contact_number" className="form-input" defaultValue={showEditModal.contact_number ?? ''} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Delivery Time</label>
+                                <input name="delivery_time" className="form-input" placeholder="e.g. 7h, &lt;12h, 6h30" defaultValue={showEditModal.delivery_time ?? ''} />
                             </div>
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowEditModal(null)} className="btn btn-ghost">Cancel</button>

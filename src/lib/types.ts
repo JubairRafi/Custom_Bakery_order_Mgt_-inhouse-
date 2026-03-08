@@ -10,6 +10,10 @@ export interface User {
     role: UserRole;
     active_status: boolean;
     created_at: string;
+    delivery_address?: string | null;
+    point_of_contact?: string | null;
+    contact_number?: string | null;
+    delivery_time?: string | null;
 }
 
 export interface Category {

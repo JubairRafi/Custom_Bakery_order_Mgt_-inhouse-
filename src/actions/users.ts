@@ -31,6 +31,10 @@ export async function createCustomer(formData: FormData) {
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+    const delivery_address = (formData.get('delivery_address') as string) || null;
+    const point_of_contact = (formData.get('point_of_contact') as string) || null;
+    const contact_number = (formData.get('contact_number') as string) || null;
+    const delivery_time = (formData.get('delivery_time') as string) || null;
 
     // Use service role client to create auth user
     const serviceSupabase = createServiceClient(
@@ -49,6 +53,14 @@ export async function createCustomer(formData: FormData) {
         return { error: authError.message };
     }
 
+    // The DB trigger only inserts name/email/role — save extra fields via UPDATE
+    if (delivery_address || point_of_contact || contact_number || delivery_time) {
+        await serviceSupabase
+            .from('users')
+            .update({ delivery_address, point_of_contact, contact_number, delivery_time })
+            .eq('id', authUser.user.id);
+    }
+
     return { success: true, userId: authUser.user.id };
 }
 
@@ -56,10 +68,14 @@ export async function updateCustomer(userId: string, formData: FormData) {
     const supabase = await createClient();
     const name = formData.get('name') as string;
     const active_status = formData.get('active_status') === 'true';
+    const delivery_address = (formData.get('delivery_address') as string) || null;
+    const point_of_contact = (formData.get('point_of_contact') as string) || null;
+    const contact_number = (formData.get('contact_number') as string) || null;
+    const delivery_time = (formData.get('delivery_time') as string) || null;
 
     const { error } = await supabase
         .from('users')
-        .update({ name, active_status })
+        .update({ name, active_status, delivery_address, point_of_contact, contact_number, delivery_time })
         .eq('id', userId);
 
     if (error) return { error: error.message };

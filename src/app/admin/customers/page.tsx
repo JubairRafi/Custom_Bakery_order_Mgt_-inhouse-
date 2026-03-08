@@ -202,8 +202,8 @@ export default function CustomersPage() {
     }
 
     return (
-        <div className="animate-fade-in">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div className="animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+            <div className="shrink-0 flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
                         <Users size={24} className="text-primary" />
@@ -232,9 +232,9 @@ export default function CustomersPage() {
                 </div>
             </div>
 
-            <div className="card">
+            <div className="card flex-1 overflow-auto min-h-0">
                 <table className="data-table">
-                    <thead>
+                    <thead className="sticky top-0 z-[5]">
                         <tr>
                             <th>Name</th>
                             <th>Email</th>

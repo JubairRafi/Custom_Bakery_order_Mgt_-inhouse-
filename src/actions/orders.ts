@@ -301,6 +301,19 @@ export async function getOrderForInvoice(orderId: string) {
     return data;
 }
 
+export async function getBulkOrdersForInvoice(date_from: string, date_to: string) {
+    const supabase = await createClient();
+    const weeklyParts = [`week_start_date.gte.${date_from}`, `week_start_date.lte.${date_to}`];
+    const dailyParts  = [`delivery_date.gte.${date_from}`,   `delivery_date.lte.${date_to}`];
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*, customer:users!customer_id(id, name, email, delivery_address, contact_number), order_items(*, product:products(name))')
+        .or(`and(${weeklyParts.join(',')}),and(${dailyParts.join(',')})`)
+        .order('created_at', { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+}
+
 export async function deleteOrder(orderId: string) {
     const supabase = await createClient();
     const { error } = await supabase

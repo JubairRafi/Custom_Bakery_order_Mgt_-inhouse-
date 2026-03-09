@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw, FileText } from 'lucide-react';
 import { format, addDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -390,6 +390,20 @@ export default function OrdersPage() {
                     >
                         <CalendarDays size={14} /> Date Filter{filterDateFrom || filterDateTo ? ' ●' : ''}
                     </button>
+                    {(() => {
+                        const lwFrom = format(startOfWeek(addDays(new Date(), -7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                        const lwTo   = format(endOfWeek(addDays(new Date(), -7),   { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                        return (
+                            <a
+                                href={`/invoice/bulk?from=${lwFrom}&to=${lwTo}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-outline btn-sm"
+                            >
+                                <FileText size={14} /> Last Week Invoices
+                            </a>
+                        );
+                    })()}
                     {(filterCustomer || filterType || showOverlapsOnly || searchQuery || searchInput || filterDateFrom || filterDateTo) && (
                         <button
                             onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); setShowDateFilter(false); setDateFromInput(''); setDateToInput(''); setFilterDateFrom(''); setFilterDateTo(''); }}

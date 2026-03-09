@@ -37,7 +37,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
 
     return (
         <>
-            <style>{`
+            {/* eslint-disable-next-line react/no-danger */}
+            <style dangerouslySetInnerHTML={{ __html: `
                 body { background: #fff !important; }
                 .invoice-wrap { max-width: 780px; margin: 0 auto; padding: 40px 32px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; font-size: 14px; }
                 .invoice-wrap img { display: block; margin: 0; }
@@ -64,7 +65,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
                     .inv-print-btn { display: none !important; }
                     .inv-wrap { padding: 0; }
                 }
-            `}</style>
+            ` }} />
 
             <div className="invoice-wrap">
                 <div className="inv-print-btn">

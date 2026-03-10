@@ -4,6 +4,7 @@ import { getOrderForInvoice } from '@/actions/orders';
 import { format, parseISO, addDays } from 'date-fns';
 import { notFound } from 'next/navigation';
 import PrintButton from './PrintButton';
+import '../invoice.css';
 
 export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }) {
     const { orderId } = await params;
@@ -73,25 +74,6 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
 
     return (
         <>
-            {/* eslint-disable-next-line react/no-danger */}
-            <style dangerouslySetInnerHTML={{ __html: `
-                body { background: #fff !important; }
-                .invoice-wrap { max-width: 780px; margin: 0 auto; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; font-size: 14px; }
-                .inv-page { padding: 40px 32px; }
-                .inv-page + .inv-page { page-break-before: always; break-before: page; }
-                .inv-table { width: 100%; border-collapse: collapse; }
-                .inv-table thead th { background: #111; color: #fff; padding: 10px 14px; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; border: none; text-align: left; }
-                .inv-table thead th:last-child { text-align: right; }
-                .inv-table tbody tr:nth-child(even) { background: #f7f7f7; }
-                .inv-table tbody td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #eee; }
-                .inv-table tbody td.right { text-align: right; font-weight: 600; }
-                .inv-total td { padding: 12px 14px; font-weight: 700; font-size: 14px; border-top: 2px solid #111 !important; border-bottom: none; background: #fff !important; }
-                .inv-footer { margin-top: 48px; font-size: 12px; color: #aaa; text-align: center; }
-                .inv-print-btn { max-width: 780px; margin: 0 auto; padding: 24px 32px 0; }
-                @media print { .inv-print-btn { display: none !important; } }
-                @media screen { .inv-page + .inv-page { border-top: 1px dashed #ddd; } }
-            ` }} />
-
             <div className="inv-print-btn">
                 <PrintButton />
             </div>

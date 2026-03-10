@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getMyOrders, getMyOrderById } from '@/actions/orders';
-import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, Pencil } from 'lucide-react';
+import { History, CalendarDays, CalendarPlus, Package, Loader2, Search, Eye, Pencil, CheckCircle, Clock } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -175,7 +175,15 @@ export default function OrderHistoryPage() {
                                     <span className={`badge ${order.order_type === 'weekly' ? 'badge-info' : 'badge-success'}`}>
                                         {order.order_type}
                                     </span>
-                                    <span className="badge badge-success">Submitted</span>
+                                    {order.status === 'confirmed' ? (
+                                        <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <CheckCircle size={12} /> Confirmed
+                                        </span>
+                                    ) : (
+                                        <span className="badge" style={{ background: '#fef3c7', color: '#92400e', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <Clock size={12} /> Pending
+                                        </span>
+                                    )}
                                     <span className="text-xs text-muted">
                                         {format(new Date(order.created_at), 'MMM dd, yyyy HH:mm')}
                                     </span>

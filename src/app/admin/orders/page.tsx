@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems } from '@/actions/orders';
+import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
-import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, RefreshCw, FileText } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, CheckCircle, RefreshCw, FileText } from 'lucide-react';
 import { format, addDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -27,6 +27,7 @@ export default function OrdersPage() {
     const [dateToInput, setDateToInput] = useState('');
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -92,6 +93,14 @@ export default function OrdersPage() {
         setHasMore(result.hasMore);
         setPage(nextPage);
         setLoadingMore(false);
+    }
+
+    async function handleConfirm(orderId: string) {
+        await confirmOrder(orderId);
+        loadData(activeFilters.current);
+        if (selectedOrder?.id === orderId) {
+            setSelectedOrder((prev: any) => prev ? { ...prev, status: 'confirmed' } : null);
+        }
     }
 
     async function handleDelete(orderId: string) {
@@ -228,9 +237,11 @@ export default function OrdersPage() {
     // Filter with search
     // Only showOverlapsOnly remains client-side; all other filters are server-side
     const filteredOrders = useMemo(() => {
-        if (!showOverlapsOnly) return orders;
-        return orders.filter((o) => isOverlapping(o));
-    }, [orders, showOverlapsOnly, overlapKeySet]);
+        let result = orders;
+        if (showOverlapsOnly) result = result.filter((o) => isOverlapping(o));
+        if (filterStatus) result = result.filter((o) => filterStatus === 'confirmed' ? o.status === 'confirmed' : o.status !== 'confirmed');
+        return result;
+    }, [orders, showOverlapsOnly, overlapKeySet, filterStatus]);
 
     if (loading) {
         return (
@@ -384,6 +395,16 @@ export default function OrdersPage() {
                         <option value="weekly">Weekly</option>
                         <option value="daily">Daily</option>
                     </select>
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="form-input py-1.5 text-sm"
+                        style={{ minWidth: '140px' }}
+                    >
+                        <option value="">All Status</option>
+                        <option value="submitted">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                    </select>
                     <button
                         onClick={() => setShowDateFilter(v => !v)}
                         className={`btn btn-sm ${filterDateFrom || filterDateTo ? 'btn-primary' : 'btn-outline'}`}
@@ -404,9 +425,9 @@ export default function OrdersPage() {
                             </a>
                         );
                     })()}
-                    {(filterCustomer || filterType || showOverlapsOnly || searchQuery || searchInput || filterDateFrom || filterDateTo) && (
+                    {(filterCustomer || filterType || filterStatus || showOverlapsOnly || searchQuery || searchInput || filterDateFrom || filterDateTo) && (
                         <button
-                            onClick={() => { setFilterCustomer(''); setFilterType(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); setShowDateFilter(false); setDateFromInput(''); setDateToInput(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+                            onClick={() => { setFilterCustomer(''); setFilterType(''); setFilterStatus(''); setShowOverlapsOnly(false); setSearchInput(''); setSearchQuery(''); setShowDateFilter(false); setDateFromInput(''); setDateToInput(''); setFilterDateFrom(''); setFilterDateTo(''); }}
                             className="btn btn-ghost btn-sm"
                         >
                             <X size={14} /> Clear
@@ -462,7 +483,7 @@ export default function OrdersPage() {
                             <th>Date</th>
                             <th>Items</th>
                             <th>Total Qty</th>
-                            <th>Submitted</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -491,8 +512,12 @@ export default function OrdersPage() {
                                     <td className="font-bold text-primary">
                                         {order.order_items?.reduce((sum: number, i: any) => sum + i.quantity, 0) || 0}
                                     </td>
-                                    <td className="text-muted text-sm">
-                                        {format(new Date(order.created_at), 'MMM dd, HH:mm')}
+                                    <td>
+                                        {order.status === 'confirmed' ? (
+                                            <span className="badge badge-success">✓ Confirmed</span>
+                                        ) : (
+                                            <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
+                                        )}
                                     </td>
                                     <td>
                                         <div className="flex items-center gap-1">
@@ -512,6 +537,11 @@ export default function OrdersPage() {
                                             ) : (
                                                 <button onClick={() => { openOrderDetail(order.id); }} className="btn btn-ghost btn-sm" title="Edit">
                                                     <Edit size={14} />
+                                                </button>
+                                            )}
+                                            {order.status !== 'confirmed' && (
+                                                <button onClick={() => handleConfirm(order.id)} className="btn btn-ghost btn-sm text-success" title="Confirm Order">
+                                                    <CheckCircle size={14} />
                                                 </button>
                                             )}
                                             <button onClick={() => handleDelete(order.id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
@@ -734,6 +764,14 @@ export default function OrdersPage() {
                                     <span className="text-sm text-muted">
                                         ID: <code className="text-xs">{selectedOrder.id.slice(0, 8)}...</code>
                                     </span>
+                                    {selectedOrder.status !== 'confirmed' && (
+                                        <button
+                                            onClick={() => handleConfirm(selectedOrder.id)}
+                                            className="btn btn-success btn-sm"
+                                        >
+                                            <CheckCircle size={14} /> Confirm Order
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </>}

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { canSubmitWeeklyOrder, canSubmitDailyOrder } from '@/lib/cutoff';
 import { sendAdminNotificationEmail, sendCustomerConfirmationEmail } from '@/lib/email';
+import { createNotification } from '@/actions/notifications';
 import { Settings } from '@/lib/types';
 import { format, addDays, parseISO } from 'date-fns';
 
@@ -112,6 +113,12 @@ export async function submitWeeklyOrder(
         console.error('Email error:', e);
     }
 
+    // In-app notification (non-blocking)
+    try {
+        const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).single();
+        createNotification('new_order', 'New Weekly Order', `${prof?.name ?? 'Customer'} — Week of ${weekStartDate}`, order.id).catch(console.error);
+    } catch {}
+
     return { success: true, orderId: order.id };
 }
 
@@ -207,6 +214,12 @@ export async function submitDailyOrder(
     } catch (e) {
         console.error('Email error:', e);
     }
+
+    // In-app notification (non-blocking)
+    try {
+        const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).single();
+        createNotification('new_order', 'New Daily Order', `${prof?.name ?? 'Customer'} — ${deliveryDate}`, order.id).catch(console.error);
+    } catch {}
 
     return { success: true, orderId: order.id };
 }
@@ -701,6 +714,12 @@ export async function editWeeklyOrder(
         console.error('Email error:', e);
     }
 
+    // In-app notification (non-blocking)
+    try {
+        const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).single();
+        createNotification('order_edited', 'Order Edited', `${prof?.name ?? 'Customer'} edited weekly order — Week of ${order.week_start_date}`, orderId).catch(console.error);
+    } catch {}
+
     return result;
 }
 
@@ -770,6 +789,12 @@ export async function editDailyOrder(
     } catch (e) {
         console.error('Email error:', e);
     }
+
+    // In-app notification (non-blocking)
+    try {
+        const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).single();
+        createNotification('order_edited', 'Order Edited', `${prof?.name ?? 'Customer'} edited daily order — ${order.delivery_date}`, orderId).catch(console.error);
+    } catch {}
 
     return result;
 }

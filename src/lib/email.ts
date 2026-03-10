@@ -21,7 +21,10 @@ interface OrderEmailData {
   submittedAt: string;
 }
 
-export async function sendOrderConfirmationEmail(data: OrderEmailData) {
+/**
+ * Send notification to admin when a new order is submitted.
+ */
+export async function sendAdminNotificationEmail(data: OrderEmailData) {
   try {
     const resend = getResendClient();
     if (!resend) {
@@ -29,53 +32,7 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
       return { success: false, error: 'Email not configured' };
     }
 
-    const itemRows = data.items
-      .map(
-        (item) =>
-          '<tr><td style="padding:8px;border:1px solid #e5e7eb">' + item.productName +
-          '</td><td style="padding:8px;border:1px solid #e5e7eb">' + item.date +
-          '</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:center">' + item.quantity +
-          '</td></tr>'
-      )
-      .join('');
-
-    const orderTypeLabel = data.orderType === 'weekly' ? 'Weekly' : 'Daily';
-
-    // Send to customer
-    const customerResult = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: data.customerEmail,
-      subject: 'Order Confirmation - ' + orderTypeLabel + ' Order',
-      html: [
-        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">',
-        '<div style="background:#1e3a5f;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0">',
-        '<h1 style="margin:0;font-size:24px">St George Bakery</h1>',
-        '<p style="margin:5px 0 0;opacity:0.9">Order Confirmation</p>',
-        '</div>',
-        '<div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb">',
-        '<p>Dear <strong>' + data.customerName + '</strong>,</p>',
-        '<p>Your <strong>' + data.orderType + '</strong> order has been successfully submitted.</p>',
-        '<p><strong>Dates:</strong> ' + data.dates + '</p>',
-        '<p><strong>Submitted:</strong> ' + data.submittedAt + '</p>',
-        '<table style="width:100%;border-collapse:collapse;margin:16px 0">',
-        '<thead><tr style="background:#1e3a5f;color:white">',
-        '<th style="padding:8px;text-align:left">Product</th>',
-        '<th style="padding:8px;text-align:left">Date</th>',
-        '<th style="padding:8px;text-align:center">Qty</th>',
-        '</tr></thead>',
-        '<tbody>' + itemRows + '</tbody>',
-        '</table>',
-        '<p style="color:#6b7280;font-size:14px">This order is now locked and cannot be edited.</p>',
-        '</div>',
-        '<div style="padding:12px;text-align:center;color:#9ca3af;font-size:12px">St George Bakery</div>',
-        '</div>',
-      ].join(''),
-    });
-
-    console.log('[EMAIL] Sent confirmation to', data.customerEmail, customerResult);
-
-    // Send notification to admin
-    const adminResult = await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: ADMIN_EMAIL,
       subject: 'New ' + data.orderType + ' Order - ' + data.customerName,
@@ -95,11 +52,71 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
       ].join(''),
     });
 
-    console.log('[EMAIL] Sent admin notification to', ADMIN_EMAIL, adminResult);
-
+    console.log('[EMAIL] Sent admin notification to', ADMIN_EMAIL, result);
     return { success: true };
   } catch (error) {
-    console.error('[EMAIL] Send error:', error);
+    console.error('[EMAIL] Admin notification error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Send confirmation email to customer when admin confirms the order.
+ */
+export async function sendCustomerConfirmationEmail(data: OrderEmailData) {
+  try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.log('[EMAIL] Skipped — no API key. Confirmation for', data.customerName);
+      return { success: false, error: 'Email not configured' };
+    }
+
+    const itemRows = data.items
+      .map(
+        (item) =>
+          '<tr><td style="padding:8px;border:1px solid #e5e7eb">' + item.productName +
+          '</td><td style="padding:8px;border:1px solid #e5e7eb">' + item.date +
+          '</td><td style="padding:8px;border:1px solid #e5e7eb;text-align:center">' + item.quantity +
+          '</td></tr>'
+      )
+      .join('');
+
+    const orderTypeLabel = data.orderType === 'weekly' ? 'Weekly' : 'Daily';
+
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.customerEmail,
+      subject: 'Order Confirmed - ' + orderTypeLabel + ' Order',
+      html: [
+        '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">',
+        '<div style="background:#1e3a5f;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0">',
+        '<h1 style="margin:0;font-size:24px">St George Bakery</h1>',
+        '<p style="margin:5px 0 0;opacity:0.9">Order Confirmed</p>',
+        '</div>',
+        '<div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb">',
+        '<p>Dear <strong>' + data.customerName + '</strong>,</p>',
+        '<p>Your <strong>' + data.orderType + '</strong> order has been <strong>confirmed</strong> by our team.</p>',
+        '<p><strong>Dates:</strong> ' + data.dates + '</p>',
+        '<p><strong>Submitted:</strong> ' + data.submittedAt + '</p>',
+        '<table style="width:100%;border-collapse:collapse;margin:16px 0">',
+        '<thead><tr style="background:#1e3a5f;color:white">',
+        '<th style="padding:8px;text-align:left">Product</th>',
+        '<th style="padding:8px;text-align:left">Date</th>',
+        '<th style="padding:8px;text-align:center">Qty</th>',
+        '</tr></thead>',
+        '<tbody>' + itemRows + '</tbody>',
+        '</table>',
+        '<p style="color:#16a34a;font-size:14px;font-weight:bold">✓ Your order has been confirmed and is being prepared.</p>',
+        '</div>',
+        '<div style="padding:12px;text-align:center;color:#9ca3af;font-size:12px">St George Bakery</div>',
+        '</div>',
+      ].join(''),
+    });
+
+    console.log('[EMAIL] Sent confirmation to', data.customerEmail, result);
+    return { success: true };
+  } catch (error) {
+    console.error('[EMAIL] Customer confirmation error:', error);
     return { success: false, error: String(error) };
   }
 }

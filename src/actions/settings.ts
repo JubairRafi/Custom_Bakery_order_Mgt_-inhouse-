@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { canSubmitWeeklyOrder, canSubmitDailyOrder } from '@/lib/cutoff';
-import { sendOrderConfirmationEmail } from '@/lib/email';
+
 import { Settings } from '@/lib/types';
 import { format, addDays } from 'date-fns';
 

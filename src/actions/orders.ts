@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { canSubmitWeeklyOrder, canSubmitDailyOrder } from '@/lib/cutoff';
-import { sendOrderConfirmationEmail } from '@/lib/email';
+import { sendAdminNotificationEmail, sendCustomerConfirmationEmail } from '@/lib/email';
 import { Settings } from '@/lib/types';
 import { format, addDays, parseISO } from 'date-fns';
 
@@ -83,7 +83,7 @@ export async function submitWeeklyOrder(
         }
     }
 
-    // Send emails (non-blocking)
+    // Send admin notification (non-blocking)
     try {
         const { data: profile } = await supabase
             .from('users')
@@ -95,7 +95,7 @@ export async function submitWeeklyOrder(
         const products = new Map(productMap?.map((p) => [p.id, p.name]) || []);
 
         if (profile) {
-            sendOrderConfirmationEmail({
+            sendAdminNotificationEmail({
                 customerName: profile.name,
                 customerEmail: profile.email,
                 orderType: 'weekly',
@@ -179,7 +179,7 @@ export async function submitDailyOrder(
         }
     }
 
-    // Send emails (non-blocking)
+    // Send admin notification (non-blocking)
     try {
         const { data: profile } = await supabase
             .from('users')
@@ -191,7 +191,7 @@ export async function submitDailyOrder(
         const products = new Map(productMap?.map((p) => [p.id, p.name]) || []);
 
         if (profile) {
-            sendOrderConfirmationEmail({
+            sendAdminNotificationEmail({
                 customerName: profile.name,
                 customerEmail: profile.email,
                 orderType: 'daily',
@@ -333,6 +333,40 @@ export async function confirmOrder(orderId: string) {
         .eq('id', orderId);
 
     if (error) return { error: error.message };
+
+    // Send confirmation email to customer (non-blocking)
+    try {
+        const { data: order } = await supabase
+            .from('orders')
+            .select('*, customer:users!customer_id(name, email), order_items(*, product:products(name))')
+            .eq('id', orderId)
+            .single();
+
+        if (order && order.customer) {
+            const customer = order.customer as any;
+            const items = (order.order_items || []) as any[];
+            const orderType = order.order_type as 'weekly' | 'daily';
+            const dates = orderType === 'weekly'
+                ? `Week of ${order.week_start_date}`
+                : order.delivery_date || '';
+
+            sendCustomerConfirmationEmail({
+                customerName: customer.name,
+                customerEmail: customer.email,
+                orderType,
+                dates,
+                items: items.map((item: any) => ({
+                    productName: item.product?.name || 'Unknown',
+                    date: item.delivery_date,
+                    quantity: item.quantity,
+                })),
+                submittedAt: order.created_at || new Date().toISOString(),
+            }).catch(console.error);
+        }
+    } catch (e) {
+        console.error('Email error on confirm:', e);
+    }
+
     return { success: true };
 }
 

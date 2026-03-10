@@ -660,13 +660,48 @@ export async function editWeeklyOrder(
 
     const { data: order } = await supabase
         .from('orders')
-        .select('customer_id')
+        .select('customer_id, week_start_date')
         .eq('id', orderId)
         .single();
 
     if (!order || order.customer_id !== user.id) return { error: 'Order not found' };
 
-    return updateOrderItems(orderId, items);
+    const result = await updateOrderItems(orderId, items);
+    if (result.error) return result;
+    await supabase.from('orders').update({ status: 'submitted' }).eq('id', orderId);
+
+    // Send admin notification about the edit (non-blocking)
+    try {
+        const { data: profile } = await supabase
+            .from('users')
+            .select('name, email')
+            .eq('id', user.id)
+            .single();
+
+        const { data: productMap } = await supabase.from('products').select('id, name');
+        const products = new Map(productMap?.map((p) => [p.id, p.name]) || []);
+
+        const activeItems = items.filter((i) => i.quantity > 0);
+
+        if (profile) {
+            sendAdminNotificationEmail({
+                customerName: profile.name + ' (Edited)',
+                customerEmail: profile.email,
+                orderType: 'weekly',
+                dates: `Week of ${order.week_start_date}`,
+                items: activeItems.map((oi) => ({
+                    productName: products.get(oi.product_id) || 'Unknown',
+                    date: oi.delivery_date,
+                    quantity: oi.quantity,
+                })),
+                submittedAt: new Date().toISOString(),
+            }).catch(console.error);
+        }
+    } catch (e) {
+        console.error('Email error:', e);
+    }
+
+    return result;
 }
 
 export async function getMyDailyOrder(deliveryDate: string) {
@@ -695,13 +730,48 @@ export async function editDailyOrder(
 
     const { data: order } = await supabase
         .from('orders')
-        .select('customer_id')
+        .select('customer_id, delivery_date')
         .eq('id', orderId)
         .single();
 
     if (!order || order.customer_id !== user.id) return { error: 'Order not found' };
 
-    return updateOrderItems(orderId, items);
+    const result = await updateOrderItems(orderId, items);
+    if (result.error) return result;
+    await supabase.from('orders').update({ status: 'submitted' }).eq('id', orderId);
+
+    // Send admin notification about the edit (non-blocking)
+    try {
+        const { data: profile } = await supabase
+            .from('users')
+            .select('name, email')
+            .eq('id', user.id)
+            .single();
+
+        const { data: productMap } = await supabase.from('products').select('id, name');
+        const products = new Map(productMap?.map((p) => [p.id, p.name]) || []);
+
+        const activeItems = items.filter((i) => i.quantity > 0);
+
+        if (profile) {
+            sendAdminNotificationEmail({
+                customerName: profile.name + ' (Edited)',
+                customerEmail: profile.email,
+                orderType: 'daily',
+                dates: order.delivery_date || '',
+                items: activeItems.map((oi) => ({
+                    productName: products.get(oi.product_id) || 'Unknown',
+                    date: oi.delivery_date,
+                    quantity: oi.quantity,
+                })),
+                submittedAt: new Date().toISOString(),
+            }).catch(console.error);
+        }
+    } catch (e) {
+        console.error('Email error:', e);
+    }
+
+    return result;
 }
 
 export async function getLastWeeklyOrder() {

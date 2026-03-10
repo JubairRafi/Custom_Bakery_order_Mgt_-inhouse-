@@ -5,7 +5,13 @@ import { Printer } from 'lucide-react';
 
 export default function PrintButton() {
     useEffect(() => {
-        window.print();
+        const images = Array.from(document.images);
+        const promises = images.map(img =>
+            img.complete
+                ? Promise.resolve()
+                : new Promise<void>(r => { img.onload = img.onerror = () => r(); })
+        );
+        Promise.all(promises).then(() => window.print());
     }, []);
 
     return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, ShoppingCart, Edit3, CheckCheck } from 'lucide-react';
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from '@/actions/notifications';
 
@@ -26,6 +27,7 @@ function timeAgo(dateStr: string) {
 }
 
 export default function NotificationBell() {
+    const router = useRouter();
     const [open, setOpen] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -71,10 +73,16 @@ export default function NotificationBell() {
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
 
-    const handleMarkRead = async (id: string) => {
-        await markAsRead(id);
-        setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
-        setUnreadCount((c) => Math.max(0, c - 1));
+    const handleNotificationClick = async (n: Notification) => {
+        if (!n.is_read) {
+            await markAsRead(n.id);
+            setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, is_read: true } : x));
+            setUnreadCount((c) => Math.max(0, c - 1));
+        }
+        setOpen(false);
+        if (n.order_id) {
+            router.push(`/admin/orders?orderId=${n.order_id}`);
+        }
     };
 
     const handleMarkAllRead = async () => {
@@ -189,7 +197,7 @@ export default function NotificationBell() {
                             notifications.map((n) => (
                                 <div
                                     key={n.id}
-                                    onClick={() => !n.is_read && handleMarkRead(n.id)}
+                                    onClick={() => handleNotificationClick(n)}
                                     style={{
                                         padding: '12px 16px',
                                         display: 'flex',
@@ -197,7 +205,7 @@ export default function NotificationBell() {
                                         alignItems: 'flex-start',
                                         borderBottom: '1px solid #f9fafb',
                                         background: n.is_read ? '#fff' : '#f0f9ff',
-                                        cursor: n.is_read ? 'default' : 'pointer',
+                                        cursor: 'pointer',
                                         transition: 'background 0.15s',
                                     }}
                                 >

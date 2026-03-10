@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getOrders, getOrderById, getOverlaps, deleteOrder, resolveOverlap, updateOrderItems, confirmOrder } from '@/actions/orders';
 import { getCustomers } from '@/actions/users';
 import { ShoppingCart, AlertTriangle, Trash2, Eye, Loader2, Search, Filter, X, Check, Save, Edit, CalendarDays, CheckCircle, RefreshCw, FileText } from 'lucide-react';
@@ -9,6 +10,7 @@ import { format, addDays, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function OrdersPage() {
+    const searchParams = useSearchParams();
     const [orders, setOrders] = useState<any[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [hasMore, setHasMore] = useState(false);
@@ -46,6 +48,14 @@ export default function OrdersPage() {
         setOverlapsLoading(true);
         getOverlaps().then((ovs) => { setOverlaps(ovs); setOverlapsLoading(false); });
     }, []);
+
+    // Auto-open order detail from notification link
+    useEffect(() => {
+        const orderId = searchParams.get('orderId');
+        if (orderId) {
+            openOrderDetail(orderId);
+        }
+    }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Server-side filter effect — search only commits on Enter, dropdowns/dates fire immediately
     useEffect(() => {

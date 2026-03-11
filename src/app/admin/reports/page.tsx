@@ -218,15 +218,25 @@ export default function ReportsPage() {
     function getExportButton() {
         if (viewMode === 'daily') {
             return (
-                <button onClick={exportDailyExcel} className="btn btn-primary btn-sm" disabled={summary.length === 0}>
-                    <Download size={14} /> Export Daily
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={printDaily} className="btn btn-ghost btn-sm" disabled={summary.length === 0}>
+                        <Printer size={14} /> Print
+                    </button>
+                    <button onClick={exportDailyExcel} className="btn btn-primary btn-sm" disabled={summary.length === 0}>
+                        <Download size={14} /> Export
+                    </button>
+                </div>
             );
         } else if (viewMode === 'weekly') {
             return (
-                <button onClick={exportWeeklyExcel} className="btn btn-primary btn-sm" disabled={!weeklySummary?.products.length}>
-                    <Download size={14} /> Export Weekly
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={printWeekly} className="btn btn-ghost btn-sm" disabled={!weeklySummary?.products.length}>
+                        <Printer size={14} /> Print
+                    </button>
+                    <button onClick={exportWeeklyExcel} className="btn btn-primary btn-sm" disabled={!weeklySummary?.products.length}>
+                        <Download size={14} /> Export
+                    </button>
+                </div>
             );
         } else if (viewMode === 'wholesale') {
             return (
@@ -241,9 +251,14 @@ export default function ReportsPage() {
             );
         } else {
             return (
-                <button onClick={exportCustomerExcel} className="btn btn-primary btn-sm" disabled={!customerReport?.customers.length}>
-                    <Download size={14} /> Export Customer Report
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={printCustomer} className="btn btn-ghost btn-sm" disabled={!customerReport?.customers.length}>
+                        <Printer size={14} /> Print
+                    </button>
+                    <button onClick={exportCustomerExcel} className="btn btn-primary btn-sm" disabled={!customerReport?.customers.length}>
+                        <Download size={14} /> Export
+                    </button>
+                </div>
             );
         }
     }
@@ -267,6 +282,178 @@ export default function ReportsPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Wholesale');
         XLSX.writeFile(wb, `wholesale_${wholesaleDate}.xlsx`);
+    }
+
+    function printDaily() {
+        if (summary.length === 0) return;
+        const dateLabel = format(new Date(selectedDate), 'EEEE, MMMM dd, yyyy');
+        const rows = summary.map((s) =>
+            `<tr>
+                <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${s.product_name}</td>
+                <td style="text-align:center;padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#dc2626">${s.total_quantity}</td>
+            </tr>`
+        ).join('');
+        const total = summary.reduce((sum, s) => sum + s.total_quantity, 0);
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Production Summary — ${dateLabel}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+        h2 { text-align: center; background: #dc2626; color: white; padding: 10px; margin-bottom: 16px; font-size: 1rem; }
+        table { width: 100%; max-width: 480px; margin: 0 auto; border-collapse: collapse; font-size: 0.88rem; }
+        th { padding: 8px 12px; border-bottom: 2px solid #e5e7eb; text-align: left; font-weight: 600; }
+        th:last-child { text-align: center; width: 120px; }
+        @media print { body { margin: 8px; } }
+    </style>
+</head>
+<body>
+    <h2>Production Summary — ${dateLabel}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th style="text-align:center">Total Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rows}
+            <tr style="background:#e2e8f0;font-weight:700">
+                <td style="padding:10px 12px;font-size:1rem">Grand Total</td>
+                <td style="text-align:center;padding:10px 12px;font-size:1.1rem;color:#dc2626">${total}</td>
+            </tr>
+        </tbody>
+    </table>
+    <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+        const w = window.open('', '_blank', 'width=600,height=800');
+        if (w) { w.document.write(html); w.document.close(); }
+    }
+
+    function printWeekly() {
+        if (!weeklySummary || weeklySummary.products.length === 0) return;
+        const monday = parseISO(weekStartDate);
+        const dateLabel = format(monday, 'MMMM dd, yyyy');
+        const dayHeaders = weeklySummary.days.map((d, i) =>
+            `<th style="text-align:center;padding:8px 6px;font-size:0.75rem">${DAY_LABELS[i]}<br/><span style="font-weight:400;opacity:0.7">${format(parseISO(d), 'dd/MM')}</span></th>`
+        ).join('');
+        const productRows = weeklySummary.products.map((p) => {
+            const cells = p.quantities.map((q) =>
+                `<td style="text-align:center;padding:6px;border-bottom:1px solid #e5e7eb">${q > 0 ? `<strong style="color:#dc2626">${q}</strong>` : '<span style="color:#ccc">—</span>'}</td>`
+            ).join('');
+            return `<tr>
+                <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:500">${p.name}</td>
+                ${cells}
+                <td style="text-align:center;padding:6px;border-bottom:1px solid #e5e7eb;font-weight:700;background:#f1f5f9">${p.total}</td>
+            </tr>`;
+        }).join('');
+        const totalCells = weeklySummary.dayTotals.map((t) =>
+            `<td style="text-align:center;padding:8px 6px;font-weight:700">${t || '—'}</td>`
+        ).join('');
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Weekly Report — ${dateLabel}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+        h2 { text-align: center; background: #dc2626; color: white; padding: 10px; margin-bottom: 16px; font-size: 1rem; }
+        table { width: 100%; margin: 0 auto; border-collapse: collapse; font-size: 0.82rem; }
+        @media print { body { margin: 8px; } }
+    </style>
+</head>
+<body>
+    <h2>Weekly Production — Week of ${dateLabel}</h2>
+    <table>
+        <thead>
+            <tr style="border-bottom:2px solid #e5e7eb">
+                <th style="text-align:left;padding:8px 10px;min-width:140px">Product</th>
+                ${dayHeaders}
+                <th style="text-align:center;padding:8px 6px;background:#f1f5f9">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${productRows}
+            <tr style="background:#e2e8f0">
+                <td style="padding:8px 10px;font-weight:700">TOTAL</td>
+                ${totalCells}
+                <td style="text-align:center;padding:8px 6px;font-weight:700;font-size:1rem;background:#cbd5e1;color:#dc2626">${weeklySummary.grandTotal}</td>
+            </tr>
+        </tbody>
+    </table>
+    <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+        const w = window.open('', '_blank', 'width=900,height=800');
+        if (w) { w.document.write(html); w.document.close(); }
+    }
+
+    function printCustomer() {
+        if (!customerReport || customerReport.customers.length === 0) return;
+        const dateLabel = `${format(parseISO(custStartDate), 'MMM dd')} to ${format(parseISO(custEndDate), 'MMM dd, yyyy')}`;
+        const productHeaders = customerReport.products.map((p) =>
+            `<th style="text-align:center;padding:8px 4px;font-size:0.7rem;min-width:60px">${p.name}</th>`
+        ).join('');
+        const customerRows = customerReport.customers.map((c) => {
+            const cells = customerReport.products.map((p) => {
+                const qty = customerReport.grid[c.id]?.[p.id] || 0;
+                return `<td style="text-align:center;padding:5px 4px;border-bottom:1px solid #e5e7eb">${qty > 0 ? `<strong style="color:#dc2626">${qty}</strong>` : '<span style="color:#ccc">—</span>'}</td>`;
+            }).join('');
+            const rowTotal = customerReport.products.reduce((s, p) => s + (customerReport.grid[c.id]?.[p.id] || 0), 0);
+            return `<tr>
+                <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font-weight:500;white-space:nowrap">${c.name}</td>
+                ${cells}
+                <td style="text-align:center;padding:5px 4px;border-bottom:1px solid #e5e7eb;font-weight:700;background:#f1f5f9">${rowTotal}</td>
+            </tr>`;
+        }).join('');
+        const totalCells = customerReport.products.map((p) => {
+            const colTotal = customerReport.customers.reduce((s, c) => s + (customerReport.grid[c.id]?.[p.id] || 0), 0);
+            return `<td style="text-align:center;padding:8px 4px;font-weight:700">${colTotal || '—'}</td>`;
+        }).join('');
+        const grandTotal = customerReport.customers.reduce((sum, c) =>
+            sum + customerReport.products.reduce((s, p) => s + (customerReport.grid[c.id]?.[p.id] || 0), 0), 0
+        );
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Report — ${dateLabel}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+        h2 { text-align: center; background: #dc2626; color: white; padding: 10px; margin-bottom: 16px; font-size: 1rem; }
+        table { width: 100%; margin: 0 auto; border-collapse: collapse; font-size: 0.78rem; }
+        @media print { body { margin: 8px; } table { font-size: 0.72rem; } }
+    </style>
+</head>
+<body>
+    <h2>Customer-Wise Report — ${dateLabel}</h2>
+    <table>
+        <thead>
+            <tr style="border-bottom:2px solid #e5e7eb">
+                <th style="text-align:left;padding:8px 10px;min-width:130px">Customer</th>
+                ${productHeaders}
+                <th style="text-align:center;padding:8px 4px;background:#f1f5f9">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${customerRows}
+            <tr style="background:#e2e8f0">
+                <td style="padding:8px 10px;font-weight:700">TOTAL</td>
+                ${totalCells}
+                <td style="text-align:center;padding:8px 4px;font-weight:700;font-size:1rem;background:#cbd5e1;color:#dc2626">${grandTotal}</td>
+            </tr>
+        </tbody>
+    </table>
+    <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+        const w = window.open('', '_blank', 'width=1000,height=800');
+        if (w) { w.document.write(html); w.document.close(); }
     }
 
     function printWholesale() {

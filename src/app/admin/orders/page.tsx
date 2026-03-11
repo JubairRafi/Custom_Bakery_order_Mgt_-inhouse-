@@ -500,8 +500,16 @@ export default function OrdersPage() {
                     <tbody>
                         {filteredOrders.map((order: any) => {
                             const hasOverlap = isOverlapping(order);
+                            const isPast = isOrderPast(order);
+                            const rowBg = hasOverlap
+                                ? undefined
+                                : order.status !== 'confirmed' && isPast
+                                    ? '#fee2e2'
+                                    : order.status !== 'confirmed'
+                                        ? '#fef9c3'
+                                        : undefined;
                             return (
-                                <tr key={order.id} className={hasOverlap ? 'bg-red-50' : ''}>
+                                <tr key={order.id} className={hasOverlap ? 'bg-red-50' : ''} style={{ background: rowBg }}>
                                     <td className="font-medium">
                                         {(order.customer as any)?.name || 'Unknown'}
                                         {hasOverlap && (

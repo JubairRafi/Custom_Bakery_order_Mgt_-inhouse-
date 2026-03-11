@@ -69,7 +69,7 @@ export default async function BulkInvoicePage({
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/logo.jpg" alt="St George Bakery" style={{ height: '90px', width: 'auto', display: 'block' }} />
                             <div style={{ textAlign: 'right', fontSize: '13px', color: '#555', lineHeight: '1.9' }}>
-                                <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>PO {sec.invoiceNumber}</strong>
+                                <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>Invoice No. {sec.invoiceNumber}</strong>
                                 {format(new Date(sec.order.created_at), 'dd MMM yyyy')}<br />
                                 <span style={{ textTransform: 'capitalize' }}>{sec.order.order_type} Order Invoice</span>
                             </div>

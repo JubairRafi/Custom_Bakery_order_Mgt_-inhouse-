@@ -8,7 +8,7 @@ import '../invoice.css';
 
 export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }) {
     const { orderId } = await params;
-    return { title: `Invoice PO ${orderId.slice(0, 8).toUpperCase()}` };
+    return { title: `Invoice No. ${orderId.slice(0, 8).toUpperCase()}` };
 }
 
 export default async function InvoicePage({ params }: { params: Promise<{ orderId: string }> }) {
@@ -50,7 +50,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.jpg" alt="St George Bakery" style={{ height: '90px', width: 'auto', display: 'block' }} />
                 <div style={{ textAlign: 'right', fontSize: '13px', color: '#555', lineHeight: '1.9' }}>
-                    <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>PO {invoiceNumber}</strong>
+                    <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>Invoice No. {invoiceNumber}</strong>
                     {format(new Date(order.created_at), 'dd MMM yyyy')}<br />
                     <span style={{ textTransform: 'capitalize' }}>{order.order_type} Order Invoice</span>
                 </div>

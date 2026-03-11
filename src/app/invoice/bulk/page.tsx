@@ -18,7 +18,7 @@ export default async function BulkInvoicePage({
     const ROWS_PER_PAGE = 18;
 
     // Pre-compute all page sections to avoid flatMap inside JSX (causes hydration issues)
-    const allSections: { key: string; order: any; customer: any; invoiceNumber: string; dateLabel: string; pageItems: any[]; pageIdx: number; totalPages: number; totalQty: number }[] = [];
+    const allSections: { key: string; order: any; customer: any; invoiceNumber: string; poNumbers: string[]; dateLabel: string; pageItems: any[]; pageIdx: number; totalPages: number; totalQty: number }[] = [];
     for (const order of orders) {
         const customer = order.customer as any;
         const items: any[] = (order.order_items ?? []).slice().sort((a: any, b: any) => {
@@ -31,6 +31,7 @@ export default async function BulkInvoicePage({
             ? `${format(parseISO(order.week_start_date), 'dd MMM yyyy')} – ${format(addDays(parseISO(order.week_start_date), 6), 'dd MMM yyyy')}`
             : format(parseISO(order.delivery_date), 'dd MMM yyyy');
         const invoiceNumber = order.id.slice(0, 8).toUpperCase();
+        const poNumbers = [...new Set(items.map((i: any) => i.po_number).filter(Boolean))];
 
         const pages: any[][] = [];
         for (let i = 0; i < items.length; i += ROWS_PER_PAGE) {
@@ -44,6 +45,7 @@ export default async function BulkInvoicePage({
                 order,
                 customer,
                 invoiceNumber,
+                poNumbers,
                 dateLabel,
                 pageItems: pages[pageIdx],
                 pageIdx,
@@ -70,6 +72,7 @@ export default async function BulkInvoicePage({
                             <img src="/logo.jpg" alt="St George Bakery" style={{ height: '90px', width: 'auto', display: 'block' }} />
                             <div style={{ textAlign: 'right', fontSize: '13px', color: '#555', lineHeight: '1.9' }}>
                                 <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>Invoice No. {sec.invoiceNumber}</strong>
+                                {sec.poNumbers.length > 0 && <span style={{ display: 'block', fontWeight: 600, color: '#333' }}>PO: {sec.poNumbers.join(', ')}</span>}
                                 {format(new Date(sec.order.created_at), 'dd MMM yyyy')}<br />
                                 <span style={{ textTransform: 'capitalize' }}>{sec.order.order_type} Order Invoice</span>
                             </div>

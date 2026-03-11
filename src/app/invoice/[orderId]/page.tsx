@@ -35,6 +35,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
         : format(parseISO(order.delivery_date!), 'dd MMM yyyy');
 
     const invoiceNumber = order.id.slice(0, 8).toUpperCase();
+    const poNumbers = [...new Set(items.map((i: any) => i.po_number).filter(Boolean))];
 
     // Split items into page-sized chunks so each printed page gets the full header
     const ROWS_PER_PAGE = 18;
@@ -51,6 +52,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
                 <img src="/logo.jpg" alt="St George Bakery" style={{ height: '90px', width: 'auto', display: 'block' }} />
                 <div style={{ textAlign: 'right', fontSize: '13px', color: '#555', lineHeight: '1.9' }}>
                     <strong style={{ color: '#111', fontSize: '16px', display: 'block', fontWeight: 800 }}>Invoice No. {invoiceNumber}</strong>
+                    {poNumbers.length > 0 && <span style={{ display: 'block', fontWeight: 600, color: '#333' }}>PO: {poNumbers.join(', ')}</span>}
                     {format(new Date(order.created_at), 'dd MMM yyyy')}<br />
                     <span style={{ textTransform: 'capitalize' }}>{order.order_type} Order Invoice</span>
                 </div>

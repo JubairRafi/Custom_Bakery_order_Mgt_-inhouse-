@@ -34,6 +34,7 @@ export default function WeeklyOrderPage() {
     const [loadingLastWeek, setLoadingLastWeek] = useState(false);
     const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
     const [defaultProds, setDefaultProds] = useState<Product[]>([]);
+    const [poNumbers, setPoNumbers] = useState<{ [date: string]: string }>({});
 
     useEffect(() => {
         async function loadData() {
@@ -79,6 +80,7 @@ export default function WeeklyOrderPage() {
             setExistingOrderId(existing.id);
             const dates = getDatesForWeek(monday);
             const productMap = new Map<string, OrderRow>();
+            const loadedPo: { [date: string]: string } = {};
             for (const item of (existing.order_items ?? []) as any[]) {
                 if (!productMap.has(item.product_id)) {
                     productMap.set(item.product_id, {
@@ -89,10 +91,15 @@ export default function WeeklyOrderPage() {
                     });
                 }
                 productMap.get(item.product_id)!.quantities[item.delivery_date] = item.quantity;
+                if (item.po_number && !loadedPo[item.delivery_date]) {
+                    loadedPo[item.delivery_date] = item.po_number;
+                }
             }
+            setPoNumbers(loadedPo);
             setOrderRows(Array.from(productMap.values()));
         } else {
             setExistingOrderId(null);
+            setPoNumbers({});
             initializeRows(prods, monday);
         }
     }
@@ -106,6 +113,7 @@ export default function WeeklyOrderPage() {
             isDefault: true,
         }));
         setOrderRows(rows);
+        setPoNumbers({});
     }
 
     function getDatesForWeek(monday: string): string[] {
@@ -266,6 +274,7 @@ export default function WeeklyOrderPage() {
                             product_id: row.product_id,
                             delivery_date: date,
                             quantity: qty,
+                            ...(poNumbers[date] ? { po_number: poNumbers[date] } : {}),
                         }))
                 );
             result = await editWeeklyOrder(existingOrderId, flatItems);
@@ -276,7 +285,7 @@ export default function WeeklyOrderPage() {
                     product_id: row.product_id,
                     quantities: row.quantities,
                 }));
-            result = await submitWeeklyOrder(selectedMonday, items);
+            result = await submitWeeklyOrder(selectedMonday, items, poNumbers);
         }
 
         if (result.error) {
@@ -479,6 +488,24 @@ export default function WeeklyOrderPage() {
                                                 {getGrandTotal()}
                                             </span>
                                         </td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                    {/* PO Number Row */}
+                                    <tr style={{ background: '#fefce8' }}>
+                                        <td className="font-semibold text-sm" style={{ color: '#92400e' }}>PO Number</td>
+                                        {dates.map((date) => (
+                                            <td key={date}>
+                                                <input
+                                                    type="text"
+                                                    value={poNumbers[date] || ''}
+                                                    onChange={(e) => setPoNumbers((prev) => ({ ...prev, [date]: e.target.value }))}
+                                                    placeholder="PO #"
+                                                    style={{ fontSize: '0.75rem', padding: '4px 6px', width: '100%', textAlign: 'center' }}
+                                                />
+                                            </td>
+                                        ))}
+                                        <td></td>
                                         <td></td>
                                         <td></td>
                                     </tr>

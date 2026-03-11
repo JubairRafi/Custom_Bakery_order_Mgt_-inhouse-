@@ -15,7 +15,8 @@ async function getSettingsForValidation(): Promise<Settings> {
 
 export async function submitWeeklyOrder(
     weekStartDate: string,
-    items: { product_id: string; quantities: { [date: string]: number } }[]
+    items: { product_id: string; quantities: { [date: string]: number } }[],
+    poNumbers?: { [date: string]: string }
 ) {
     const supabase = await createClient();
 
@@ -58,7 +59,7 @@ export async function submitWeeklyOrder(
     if (orderError) return { error: orderError.message };
 
     // Create order items
-    const orderItems: { order_id: string; product_id: string; delivery_date: string; quantity: number }[] = [];
+    const orderItems: { order_id: string; product_id: string; delivery_date: string; quantity: number; po_number?: string }[] = [];
     for (const item of items) {
         for (const [date, quantity] of Object.entries(item.quantities)) {
             if (quantity > 0) {
@@ -67,6 +68,7 @@ export async function submitWeeklyOrder(
                     product_id: item.product_id,
                     delivery_date: date,
                     quantity,
+                    ...(poNumbers?.[date] ? { po_number: poNumbers[date] } : {}),
                 });
             }
         }
@@ -124,7 +126,8 @@ export async function submitWeeklyOrder(
 
 export async function submitDailyOrder(
     deliveryDate: string,
-    items: { product_id: string; quantity: number }[]
+    items: { product_id: string; quantity: number }[],
+    poNumber?: string
 ) {
     const supabase = await createClient();
 
@@ -173,6 +176,7 @@ export async function submitDailyOrder(
             product_id: i.product_id,
             delivery_date: deliveryDate,
             quantity: i.quantity,
+            ...(poNumber ? { po_number: poNumber } : {}),
         }));
 
     if (orderItems.length > 0) {
@@ -444,7 +448,7 @@ export async function adminCreateOrder(
 
 export async function updateOrderItems(
     orderId: string,
-    items: { product_id: string; delivery_date: string; quantity: number }[]
+    items: { product_id: string; delivery_date: string; quantity: number; po_number?: string }[]
 ) {
     const supabase = await createClient();
 
@@ -460,6 +464,7 @@ export async function updateOrderItems(
             product_id: i.product_id,
             delivery_date: i.delivery_date,
             quantity: i.quantity,
+            ...(i.po_number ? { po_number: i.po_number } : {}),
         }));
 
     if (orderItems.length > 0) {
@@ -654,7 +659,7 @@ export async function getMyWeeklyOrder(weekStartDate: string) {
 
     const { data } = await supabase
         .from('orders')
-        .select('id, week_start_date, order_items(product_id, delivery_date, quantity, product:products(name))')
+        .select('id, week_start_date, order_items(product_id, delivery_date, quantity, po_number, product:products(name))')
         .eq('customer_id', user.id)
         .eq('order_type', 'weekly')
         .eq('week_start_date', weekStartDate)
@@ -665,7 +670,7 @@ export async function getMyWeeklyOrder(weekStartDate: string) {
 
 export async function editWeeklyOrder(
     orderId: string,
-    items: { product_id: string; delivery_date: string; quantity: number }[]
+    items: { product_id: string; delivery_date: string; quantity: number; po_number?: string }[]
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -730,7 +735,7 @@ export async function getMyDailyOrder(deliveryDate: string) {
 
     const { data } = await supabase
         .from('orders')
-        .select('id, delivery_date, order_items(product_id, delivery_date, quantity, product:products(name))')
+        .select('id, delivery_date, order_items(product_id, delivery_date, quantity, po_number, product:products(name))')
         .eq('customer_id', user.id)
         .eq('order_type', 'daily')
         .eq('delivery_date', deliveryDate)
@@ -741,7 +746,7 @@ export async function getMyDailyOrder(deliveryDate: string) {
 
 export async function editDailyOrder(
     orderId: string,
-    items: { product_id: string; delivery_date: string; quantity: number }[]
+    items: { product_id: string; delivery_date: string; quantity: number; po_number?: string }[]
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

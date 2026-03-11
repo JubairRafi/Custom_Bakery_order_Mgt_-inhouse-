@@ -665,6 +665,36 @@ export default function OrdersPage() {
                                 </div>
                             </div>
 
+                            {/* PO Numbers */}
+                            {(() => {
+                                const items = selectedOrder.order_items || [];
+                                const poByDate: { [date: string]: string } = {};
+                                items.forEach((item: any) => {
+                                    if (item.po_number && !poByDate[item.delivery_date]) {
+                                        poByDate[item.delivery_date] = item.po_number;
+                                    }
+                                });
+                                const poEntries = Object.entries(poByDate);
+                                if (poEntries.length === 0) return null;
+                                if (poEntries.length === 1) {
+                                    return (
+                                        <div className="mb-4 px-3 py-2 rounded-lg text-sm" style={{ background: '#fefce8', border: '1px solid #fde68a' }}>
+                                            <span className="font-semibold" style={{ color: '#92400e' }}>PO:</span> {poEntries[0][1]}
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div className="mb-4 px-3 py-2 rounded-lg text-sm" style={{ background: '#fefce8', border: '1px solid #fde68a' }}>
+                                        <span className="font-semibold" style={{ color: '#92400e' }}>PO Numbers:</span>
+                                        <div className="flex flex-wrap gap-3 mt-1">
+                                            {poEntries.map(([date, po]) => (
+                                                <span key={date}><strong>{format(parseISO(date), 'EEE dd/MM')}</strong>: {po}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             {/* Weekly Grid View */}
                             {selectedOrder.order_type === 'weekly' && weeklyGridData ? (
                                 <div className="overflow-x-auto">

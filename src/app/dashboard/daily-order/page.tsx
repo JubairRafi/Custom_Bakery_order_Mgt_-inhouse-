@@ -33,6 +33,7 @@ export default function DailyOrderPage() {
     const [productSearch, setProductSearch] = useState('');
     const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
     const [defaultRows, setDefaultRows] = useState<DailyRow[]>([]);
+    const [poNumber, setPoNumber] = useState('');
 
     useEffect(() => {
         async function loadData() {
@@ -77,20 +78,26 @@ export default function DailyOrderPage() {
         if (existing) {
             setExistingOrderId(existing.id);
             const seen = new Set<string>();
+            let loadedPo = '';
             const rows: DailyRow[] = ((existing.order_items ?? []) as any[])
                 .filter((item: any) => {
                     if (seen.has(item.product_id)) return false;
                     seen.add(item.product_id);
                     return true;
                 })
-                .map((item: any) => ({
-                    product_id: item.product_id,
-                    product_name: item.product?.name ?? 'Unknown',
-                    quantity: item.quantity,
-                }));
+                .map((item: any) => {
+                    if (item.po_number && !loadedPo) loadedPo = item.po_number;
+                    return {
+                        product_id: item.product_id,
+                        product_name: item.product?.name ?? 'Unknown',
+                        quantity: item.quantity,
+                    };
+                });
+            setPoNumber(loadedPo);
             setOrderRows(rows);
         } else {
             setExistingOrderId(null);
+            setPoNumber('');
             setOrderRows(fallbackRows.map((r) => ({ ...r, quantity: 0 })));
         }
     }
@@ -152,13 +159,13 @@ export default function DailyOrderPage() {
         if (existingOrderId) {
             const items = orderRows
                 .filter((r) => r.quantity > 0)
-                .map((r) => ({ product_id: r.product_id, delivery_date: deliveryDate, quantity: r.quantity }));
+                .map((r) => ({ product_id: r.product_id, delivery_date: deliveryDate, quantity: r.quantity, ...(poNumber ? { po_number: poNumber } : {}) }));
             result = await editDailyOrder(existingOrderId, items);
         } else {
             const items = orderRows
                 .filter((r) => r.quantity > 0)
                 .map((r) => ({ product_id: r.product_id, quantity: r.quantity }));
-            result = await submitDailyOrder(deliveryDate, items);
+            result = await submitDailyOrder(deliveryDate, items, poNumber || undefined);
         }
 
         if (result.error) {
@@ -234,19 +241,32 @@ export default function DailyOrderPage() {
 
             {/* Date Selector */}
             <div className="card p-5 mb-6">
-                <div className="form-group mb-0">
-                    <label className="form-label">Delivery Date</label>
-                    <input
-                        type="date"
-                        value={deliveryDate}
-                        onChange={(e) => handleDateChange(e.target.value)}
-                        min={existingOrderId ? undefined : format(addDays(new Date(), 1), 'yyyy-MM-dd')}
-                        className="form-input"
-                        style={{ maxWidth: '250px' }}
-                    />
-                    <p className={`text-xs mt-1 ${canSubmit ? 'text-success' : 'text-danger'}`}>
-                        {cutoffMessage}
-                    </p>
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="form-group mb-0">
+                        <label className="form-label">Delivery Date</label>
+                        <input
+                            type="date"
+                            value={deliveryDate}
+                            onChange={(e) => handleDateChange(e.target.value)}
+                            min={existingOrderId ? undefined : format(addDays(new Date(), 1), 'yyyy-MM-dd')}
+                            className="form-input"
+                            style={{ maxWidth: '250px' }}
+                        />
+                        <p className={`text-xs mt-1 ${canSubmit ? 'text-success' : 'text-danger'}`}>
+                            {cutoffMessage}
+                        </p>
+                    </div>
+                    <div className="form-group mb-0">
+                        <label className="form-label">PO Number</label>
+                        <input
+                            type="text"
+                            value={poNumber}
+                            onChange={(e) => setPoNumber(e.target.value)}
+                            placeholder="Enter PO number (optional)"
+                            className="form-input"
+                            style={{ maxWidth: '250px' }}
+                        />
+                    </div>
                 </div>
             </div>
 

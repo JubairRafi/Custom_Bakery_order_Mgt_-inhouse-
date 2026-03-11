@@ -256,17 +256,29 @@ export default function DailyOrderPage() {
                             {cutoffMessage}
                         </p>
                     </div>
+                    {settings?.po_enabled && (
                     <div className="form-group mb-0">
-                        <label className="form-label">PO Number</label>
+                        <label className="form-label" style={{ fontWeight: 600, color: '#92400e' }}>PO Number</label>
                         <input
                             type="text"
                             value={poNumber}
                             onChange={(e) => setPoNumber(e.target.value)}
                             placeholder="Enter PO number (optional)"
-                            className="form-input"
-                            style={{ maxWidth: '250px' }}
+                            style={{
+                                maxWidth: '250px',
+                                padding: '8px 12px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                background: '#fff',
+                                outline: 'none',
+                                width: '100%',
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#f59e0b'}
+                            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                         />
                     </div>
+                    )}
                 </div>
             </div>
 

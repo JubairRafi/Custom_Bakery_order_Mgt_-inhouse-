@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSettings, updateSettings } from '@/actions/settings';
-import { Settings as SettingsIcon, Save, Loader2, Clock, CalendarDays, Check } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Clock, CalendarDays, Check, FileText } from 'lucide-react';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -142,6 +142,62 @@ export default function SettingsPage() {
                     <div className="mt-3 p-3 rounded-lg text-sm" style={{ background: '#f0fdf4', color: '#166534' }}>
                         <strong>Current:</strong> Daily orders use cut-off time of{' '}
                         <strong>{settings?.daily_cutoff_time?.substring(0, 5)}</strong>
+                    </div>
+                </div>
+
+                {/* PO Number Setting */}
+                <div className="card p-6 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', width: '40px', height: '40px' }}>
+                            <FileText size={18} className="text-white" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-foreground">PO Number</h3>
+                            <p className="text-sm text-muted">Allow customers to enter PO numbers with their orders</p>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="po_enabled" value={settings?.po_enabled ? 'true' : 'false'} />
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setSettings((prev: any) => ({ ...prev, po_enabled: !prev.po_enabled }))}
+                            style={{
+                                width: '48px',
+                                height: '26px',
+                                borderRadius: '13px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                position: 'relative',
+                                transition: 'background 0.2s',
+                                background: settings?.po_enabled ? '#10b981' : '#d1d5db',
+                            }}
+                        >
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: '3px',
+                                    left: settings?.po_enabled ? '25px' : '3px',
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '50%',
+                                    background: '#fff',
+                                    transition: 'left 0.2s',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                }}
+                            />
+                        </button>
+                        <span className="text-sm font-medium text-foreground">
+                            {settings?.po_enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                    </div>
+
+                    <div className="mt-3 p-3 rounded-lg text-sm" style={{ background: settings?.po_enabled ? '#fefce8' : '#f3f4f6', color: settings?.po_enabled ? '#92400e' : '#6b7280' }}>
+                        {settings?.po_enabled
+                            ? <><strong>Enabled:</strong> Customers can enter PO numbers when placing orders</>
+                            : <><strong>Disabled:</strong> PO number fields are hidden from customers</>
+                        }
                     </div>
                 </div>
 

@@ -492,6 +492,7 @@ export default function WeeklyOrderPage() {
                                         <td></td>
                                     </tr>
                                     {/* PO Number Row */}
+                                    {settings?.po_enabled && (
                                     <tr style={{ background: '#fefce8' }}>
                                         <td className="font-semibold text-sm" style={{ color: '#92400e' }}>PO Number</td>
                                         {dates.map((date) => (
@@ -501,7 +502,18 @@ export default function WeeklyOrderPage() {
                                                     value={poNumbers[date] || ''}
                                                     onChange={(e) => setPoNumbers((prev) => ({ ...prev, [date]: e.target.value }))}
                                                     placeholder="PO #"
-                                                    style={{ fontSize: '0.75rem', padding: '4px 6px', width: '100%', textAlign: 'center' }}
+                                                    style={{
+                                                        fontSize: '0.75rem',
+                                                        padding: '6px 8px',
+                                                        width: '100%',
+                                                        textAlign: 'center',
+                                                        border: '1px solid #d1d5db',
+                                                        borderRadius: '6px',
+                                                        background: '#fff',
+                                                        outline: 'none',
+                                                    }}
+                                                    onFocus={(e) => e.target.style.borderColor = '#f59e0b'}
+                                                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                                                 />
                                             </td>
                                         ))}
@@ -509,6 +521,7 @@ export default function WeeklyOrderPage() {
                                         <td></td>
                                         <td></td>
                                     </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>

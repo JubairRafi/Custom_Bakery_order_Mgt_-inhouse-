@@ -74,6 +74,7 @@ export interface Settings {
     daily_cutoff_time: string;
     weekly_cutoff_day: number;
     weekly_cutoff_time: string;
+    po_enabled: boolean;
 }
 
 // ─── Form Types ────────────────────────────────────────

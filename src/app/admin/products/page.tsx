@@ -518,7 +518,7 @@ export default function ProductsPage() {
             {/* ── Create Product Modal ─────────────────────────────────── */}
             {showCreateModal && (
                 <div className="modal-backdrop">
-                    <div className="modal-content" style={{ maxWidth: '460px' }}>
+                    <div className="modal-content" style={{ maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold">Add Product</h3>
                             <button onClick={() => setShowCreateModal(false)} className="text-muted hover:text-foreground"><X size={20} /></button>
@@ -577,6 +577,49 @@ export default function ProductsPage() {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="border-t pt-4 mt-2">
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Product Details</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="form-group">
+                                        <label className="form-label">Weight</label>
+                                        <input name="weight" className="form-input" placeholder="e.g. 500g" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Minimum Order</label>
+                                        <input name="minimum_order" type="number" min="0" className="form-input" placeholder="e.g. 10" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Risk Number</label>
+                                        <input name="risk_number" className="form-input" placeholder="e.g. 1" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Product Code</label>
+                                        <input name="product_code" className="form-input" placeholder="e.g. BRB5150" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Yield Amount</label>
+                                        <input name="yield_amount" type="number" min="0" step="any" className="form-input" placeholder="e.g. 1" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Yield Unit</label>
+                                        <input name="yield_unit" className="form-input" placeholder="e.g. piece" />
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Allergens</label>
+                                    <input name="allergens" className="form-input" placeholder="e.g. Gluten, Nuts" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Ingredient</label>
+                                    <textarea name="ingredient" className="form-input" rows={2} placeholder="e.g. Flour, Water, Salt..." />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Image URL</label>
+                                    <input name="image_url" className="form-input" placeholder="https://..." />
+                                </div>
+                            </div>
+
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-ghost">Cancel</button>
                                 <button type="submit" disabled={formLoading} className="btn btn-primary">
@@ -591,7 +634,7 @@ export default function ProductsPage() {
             {/* ── Edit Product Modal ───────────────────────────────────── */}
             {showEditModal && (
                 <div className="modal-backdrop">
-                    <div className="modal-content" style={{ maxWidth: '460px' }}>
+                    <div className="modal-content" style={{ maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold">Edit Product</h3>
                             <button onClick={() => setShowEditModal(null)} className="text-muted hover:text-foreground"><X size={20} /></button>
@@ -657,6 +700,49 @@ export default function ProductsPage() {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="border-t pt-4 mt-2">
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Product Details</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="form-group">
+                                        <label className="form-label">Weight</label>
+                                        <input name="weight" className="form-input" defaultValue={showEditModal.weight ?? ''} placeholder="e.g. 500g" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Minimum Order</label>
+                                        <input name="minimum_order" type="number" min="0" className="form-input" defaultValue={showEditModal.minimum_order ?? ''} placeholder="e.g. 10" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Risk Number</label>
+                                        <input name="risk_number" className="form-input" defaultValue={showEditModal.risk_number ?? ''} placeholder="e.g. 1" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Product Code</label>
+                                        <input name="product_code" className="form-input" defaultValue={showEditModal.product_code ?? ''} placeholder="e.g. BRB5150" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Yield Amount</label>
+                                        <input name="yield_amount" type="number" min="0" step="any" className="form-input" defaultValue={showEditModal.yield_amount ?? ''} placeholder="e.g. 1" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Yield Unit</label>
+                                        <input name="yield_unit" className="form-input" defaultValue={showEditModal.yield_unit ?? ''} placeholder="e.g. piece" />
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Allergens</label>
+                                    <input name="allergens" className="form-input" defaultValue={showEditModal.allergens ?? ''} placeholder="e.g. Gluten, Nuts" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Ingredient</label>
+                                    <textarea name="ingredient" className="form-input" rows={2} defaultValue={showEditModal.ingredient ?? ''} placeholder="e.g. Flour, Water, Salt..." />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Image URL</label>
+                                    <input name="image_url" className="form-input" defaultValue={showEditModal.image_url ?? ''} placeholder="https://..." />
+                                </div>
+                            </div>
+
                             <div className="flex gap-3 justify-end mt-4">
                                 <button type="button" onClick={() => setShowEditModal(null)} className="btn btn-ghost">Cancel</button>
                                 <button type="submit" disabled={formLoading} className="btn btn-primary">

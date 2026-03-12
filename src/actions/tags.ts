@@ -134,10 +134,10 @@ export async function getActiveProductsForCustomer(): Promise<Product[]> {
         if (productIds.length === 0) return [];
     }
 
-    // 3. Fetch the products (with category)
+    // 3. Fetch the products (with category and tags)
     let query = supabase
         .from('products')
-        .select('*, category:product_categories(id, name)')
+        .select('*, category:product_categories(id, name), tags:product_tags(tag:tags(id, name))')
         .eq('active_status', true)
         .order('display_order', { ascending: true });
 
@@ -147,5 +147,8 @@ export async function getActiveProductsForCustomer(): Promise<Product[]> {
 
     const { data, error } = await query;
     if (error) return [];
-    return (data ?? []) as Product[];
+    return (data ?? []).map((p: any) => ({
+        ...p,
+        tags: (p.tags ?? []).map((pt: any) => pt.tag).filter(Boolean),
+    })) as Product[];
 }

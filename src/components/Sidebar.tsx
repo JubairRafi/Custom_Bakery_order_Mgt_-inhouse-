@@ -126,6 +126,7 @@ export const customerLinks: SidebarLink[] = [
     { href: '/dashboard/weekly-order', label: 'Weekly Order', icon: <CalendarDays size={18} /> },
     { href: '/dashboard/daily-order', label: 'Daily Order', icon: <CalendarPlus size={18} /> },
     { href: '/dashboard/history', label: 'Order History', icon: <History size={18} /> },
+    { href: '/dashboard/my-products', label: 'My Products', icon: <Package size={18} /> },
 ];
 
 export const adminLinks: SidebarLink[] = [

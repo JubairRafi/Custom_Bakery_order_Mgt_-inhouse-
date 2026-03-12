@@ -88,9 +88,21 @@ export async function createProduct(formData: FormData) {
     const cutoff_hours_raw = formData.get('cutoff_hours') as string;
     const cutoff_hours = cutoff_hours_raw ? parseInt(cutoff_hours_raw, 10) : null;
 
+    const weight = (formData.get('weight') as string) || null;
+    const minimum_order_raw = formData.get('minimum_order') as string;
+    const minimum_order = minimum_order_raw ? parseInt(minimum_order_raw, 10) : null;
+    const risk_number = (formData.get('risk_number') as string) || null;
+    const yield_amount_raw = formData.get('yield_amount') as string;
+    const yield_amount = yield_amount_raw ? parseFloat(yield_amount_raw) : null;
+    const yield_unit = (formData.get('yield_unit') as string) || null;
+    const allergens = (formData.get('allergens') as string) || null;
+    const ingredient = (formData.get('ingredient') as string) || null;
+    const product_code = (formData.get('product_code') as string) || null;
+    const image_url = (formData.get('image_url') as string) || null;
+
     const { data, error } = await supabase
         .from('products')
-        .insert({ name, display_order, category_id, cutoff_hours })
+        .insert({ name, display_order, category_id, cutoff_hours, weight, minimum_order, risk_number, yield_amount, yield_unit, allergens, ingredient, product_code, image_url })
         .select('id')
         .single();
 
@@ -106,9 +118,21 @@ export async function updateProduct(productId: string, formData: FormData) {
     const cutoff_hours_raw = formData.get('cutoff_hours') as string;
     const cutoff_hours = cutoff_hours_raw ? parseInt(cutoff_hours_raw, 10) : null;
 
+    const weight = (formData.get('weight') as string) || null;
+    const minimum_order_raw = formData.get('minimum_order') as string;
+    const minimum_order = minimum_order_raw ? parseInt(minimum_order_raw, 10) : null;
+    const risk_number = (formData.get('risk_number') as string) || null;
+    const yield_amount_raw = formData.get('yield_amount') as string;
+    const yield_amount = yield_amount_raw ? parseFloat(yield_amount_raw) : null;
+    const yield_unit = (formData.get('yield_unit') as string) || null;
+    const allergens = (formData.get('allergens') as string) || null;
+    const ingredient = (formData.get('ingredient') as string) || null;
+    const product_code = (formData.get('product_code') as string) || null;
+    const image_url = (formData.get('image_url') as string) || null;
+
     const { error } = await supabase
         .from('products')
-        .update({ name, active_status, category_id, cutoff_hours })
+        .update({ name, active_status, category_id, cutoff_hours, weight, minimum_order, risk_number, yield_amount, yield_unit, allergens, ingredient, product_code, image_url })
         .eq('id', productId);
 
     if (error) return { error: error.message };
@@ -128,7 +152,7 @@ export async function reorderProducts(orderedIds: string[]) {
 }
 
 export async function bulkCreateProducts(
-    rows: { name: string; category_id: string | null; active_status: boolean; tag_ids: string[] }[]
+    rows: { name: string; category_id: string | null; active_status: boolean; tag_ids: string[]; weight?: string | null; minimum_order?: number | null; risk_number?: string | null; yield_amount?: number | null; yield_unit?: string | null; allergens?: string | null; ingredient?: string | null; product_code?: string | null; image_url?: string | null }[]
 ) {
     const supabase = await createClient();
     if (rows.length === 0) return { inserted: 0 };
@@ -147,6 +171,15 @@ export async function bulkCreateProducts(
         category_id: r.category_id,
         active_status: r.active_status,
         display_order: nextOrder++,
+        weight: r.weight || null,
+        minimum_order: r.minimum_order || null,
+        risk_number: r.risk_number || null,
+        yield_amount: r.yield_amount || null,
+        yield_unit: r.yield_unit || null,
+        allergens: r.allergens || null,
+        ingredient: r.ingredient || null,
+        product_code: r.product_code || null,
+        image_url: r.image_url || null,
     }));
 
     const { data, error } = await supabase

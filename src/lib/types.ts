@@ -40,6 +40,15 @@ export interface Product {
     category?: { id: string; name: string } | null;
     tags?: { id: string; name: string }[];
     cutoff_hours?: number | null;
+    weight?: string | null;
+    minimum_order?: number | null;
+    risk_number?: string | null;
+    yield_amount?: number | null;
+    yield_unit?: string | null;
+    allergens?: string | null;
+    ingredient?: string | null;
+    product_code?: string | null;
+    image_url?: string | null;
 }
 
 export interface CustomerDefaultProduct {

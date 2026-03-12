@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getActiveProductsForCustomer } from '@/actions/tags';
-import { getMyDefaultProducts } from '@/actions/users';
+import { getMyDefaultProducts, getMyProfile } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitWeeklyOrder, getLastWeeklyOrder, getMyWeeklyOrder, editWeeklyOrder } from '@/actions/orders';
 import { getAvailableMondays, canSubmitDailyOrder, isProductDayLocked } from '@/lib/cutoff';
@@ -35,18 +35,21 @@ export default function WeeklyOrderPage() {
     const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
     const [defaultProds, setDefaultProds] = useState<Product[]>([]);
     const [poNumbers, setPoNumbers] = useState<{ [date: string]: string }>({});
+    const [poEnabled, setPoEnabled] = useState(false);
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts, defProds] = await Promise.all([
+                const [prods, setts, defProds, profile] = await Promise.all([
                     getActiveProductsForCustomer(),
                     getSettings(),
                     getMyDefaultProducts(),
+                    getMyProfile(),
                 ]);
                 setProducts(prods);
                 setSettings(setts);
                 setDefaultProds(defProds);
+                setPoEnabled(profile?.po_enabled ?? false);
 
                 const mondays = getAvailableMondays(setts, new Date());
 
@@ -492,7 +495,7 @@ export default function WeeklyOrderPage() {
                                         <td></td>
                                     </tr>
                                     {/* PO Number Row */}
-                                    {settings?.po_enabled && (
+                                    {poEnabled && (
                                     <tr style={{ background: '#fefce8' }}>
                                         <td className="font-semibold text-sm" style={{ color: '#92400e' }}>PO Number</td>
                                         {dates.map((date) => (

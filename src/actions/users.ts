@@ -134,6 +134,32 @@ export async function getCustomersPaginated(
     };
 }
 
+export async function getMyProfile() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+    if (error) return null;
+    return data;
+}
+
+export async function updateCustomerPoEnabled(customerId: string, poEnabled: boolean) {
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from('users')
+        .update({ po_enabled: poEnabled })
+        .eq('id', customerId);
+
+    if (error) return { error: error.message };
+    return { success: true };
+}
+
 export async function getCustomerDefaultProducts(customerId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase

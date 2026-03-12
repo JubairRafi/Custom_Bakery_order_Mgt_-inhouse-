@@ -14,6 +14,7 @@ export interface User {
     point_of_contact?: string | null;
     contact_number?: string | null;
     delivery_time?: string | null;
+    po_enabled: boolean;
 }
 
 export interface Category {
@@ -74,7 +75,6 @@ export interface Settings {
     daily_cutoff_time: string;
     weekly_cutoff_day: number;
     weekly_cutoff_time: string;
-    po_enabled: boolean;
 }
 
 // ─── Form Types ────────────────────────────────────────

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getCustomers, getCustomersPaginated, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts, bulkCreateCustomers } from '@/actions/users';
+import { getCustomers, getCustomersPaginated, createCustomer, updateCustomer, deactivateCustomer, resetCustomerPassword, getCustomerDefaultProducts, setCustomerDefaultProducts, bulkCreateCustomers, updateCustomerPoEnabled } from '@/actions/users';
 import { getProducts } from '@/actions/products';
 import { getTags, getCustomerTags, setCustomerTags } from '@/actions/tags';
 import { Users, Plus, Edit, Ban, KeyRound, Package, Loader2, X, Check, Search, Tag, Upload, AlertCircle } from 'lucide-react';
@@ -25,6 +25,7 @@ export default function CustomersPage() {
     const [selectedDefaults, setSelectedDefaults] = useState<string[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [productSearch, setProductSearch] = useState('');
+    const [poEnabled, setPoEnabled] = useState(false);
     const [formError, setFormError] = useState('');
     const [formLoading, setFormLoading] = useState(false);
     const [showBulkModal, setShowBulkModal] = useState(false);
@@ -121,6 +122,7 @@ export default function CustomersPage() {
     async function openDefaultsModal(customer: any) {
         setShowDefaultsModal(customer);
         setProductSearch('');
+        setPoEnabled(customer.po_enabled ?? false);
         setFormLoading(true);
         const [defaults, tagIds] = await Promise.all([
             getCustomerDefaultProducts(customer.id),
@@ -136,9 +138,11 @@ export default function CustomersPage() {
         await Promise.all([
             setCustomerDefaultProducts(showDefaultsModal.id, selectedDefaults),
             setCustomerTags(showDefaultsModal.id, selectedTags),
+            updateCustomerPoEnabled(showDefaultsModal.id, poEnabled),
         ]);
         setShowDefaultsModal(null);
         setFormLoading(false);
+        loadData(activeFilters.current);
     }
 
     function toggleDefault(productId: string) {
@@ -508,6 +512,44 @@ export default function CustomersPage() {
                                         </div>
                                     </>
                                 )}
+
+                                {/* PO Number Toggle */}
+                                <div className="border-t pt-4 mt-4 mb-2">
+                                    <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">PO Number</p>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPoEnabled(!poEnabled)}
+                                            style={{
+                                                width: '48px',
+                                                height: '26px',
+                                                borderRadius: '13px',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                position: 'relative',
+                                                transition: 'background 0.2s',
+                                                background: poEnabled ? '#10b981' : '#d1d5db',
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '3px',
+                                                    left: poEnabled ? '25px' : '3px',
+                                                    width: '20px',
+                                                    height: '20px',
+                                                    borderRadius: '50%',
+                                                    background: '#fff',
+                                                    transition: 'left 0.2s',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                                }}
+                                            />
+                                        </button>
+                                        <span className="text-sm font-medium">
+                                            {poEnabled ? 'PO input enabled for this customer' : 'PO input disabled'}
+                                        </span>
+                                    </div>
+                                </div>
 
                                 <div className="flex gap-3 justify-end mt-4">
                                     <button onClick={() => setShowDefaultsModal(null)} className="btn btn-ghost">Cancel</button>

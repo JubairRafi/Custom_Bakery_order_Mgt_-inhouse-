@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getActiveProductsForCustomer } from '@/actions/tags';
-import { getMyDefaultProducts } from '@/actions/users';
+import { getMyDefaultProducts, getMyProfile } from '@/actions/users';
 import { getSettings } from '@/actions/settings';
 import { submitDailyOrder, getMyDailyOrder, editDailyOrder } from '@/actions/orders';
 import { canSubmitDailyOrder, isProductDayLocked } from '@/lib/cutoff';
@@ -34,17 +34,20 @@ export default function DailyOrderPage() {
     const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
     const [defaultRows, setDefaultRows] = useState<DailyRow[]>([]);
     const [poNumber, setPoNumber] = useState('');
+    const [poEnabled, setPoEnabled] = useState(false);
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [prods, setts, defProds] = await Promise.all([
+                const [prods, setts, defProds, profile] = await Promise.all([
                     getActiveProductsForCustomer(),
                     getSettings(),
                     getMyDefaultProducts(),
+                    getMyProfile(),
                 ]);
                 setProducts(prods);
                 setSettings(setts);
+                setPoEnabled(profile?.po_enabled ?? false);
 
                 const rows: DailyRow[] = defProds.map((p) => ({
                     product_id: p.id,
@@ -256,7 +259,7 @@ export default function DailyOrderPage() {
                             {cutoffMessage}
                         </p>
                     </div>
-                    {settings?.po_enabled && (
+                    {poEnabled && (
                     <div className="form-group mb-0">
                         <label className="form-label" style={{ fontWeight: 600, color: '#92400e' }}>PO Number</label>
                         <input

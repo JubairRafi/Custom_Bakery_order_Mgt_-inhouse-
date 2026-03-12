@@ -24,11 +24,10 @@ export async function updateSettings(formData: FormData) {
     const daily_cutoff_time = formData.get('daily_cutoff_time') as string;
     const weekly_cutoff_day = parseInt(formData.get('weekly_cutoff_day') as string);
     const weekly_cutoff_time = formData.get('weekly_cutoff_time') as string;
-    const po_enabled = formData.get('po_enabled') === 'true';
 
     const { error } = await supabase
         .from('settings')
-        .update({ daily_cutoff_time, weekly_cutoff_day, weekly_cutoff_time, po_enabled })
+        .update({ daily_cutoff_time, weekly_cutoff_day, weekly_cutoff_time })
         .eq('id', 1);
 
     if (error) return { error: error.message };

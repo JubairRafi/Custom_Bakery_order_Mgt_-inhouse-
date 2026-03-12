@@ -41,7 +41,7 @@ export default function ProductsPage() {
 
     // Bulk upload modal
     const [showBulkModal, setShowBulkModal] = useState(false);
-    const [bulkRows, setBulkRows] = useState<{ name: string; category: string; active: string; tags: string }[]>([]);
+    const [bulkRows, setBulkRows] = useState<{ name: string; category: string; active: string; tags: string; weight: string; minimum_order: string; risk_number: string; yield_amount: string; yield_unit: string; allergens: string; ingredient: string; product_code: string; image_url: string }[]>([]);
     const [bulkError, setBulkError] = useState('');
     const [bulkLoading, setBulkLoading] = useState(false);
     const [bulkResult, setBulkResult] = useState<{ inserted: number; skipped: number } | null>(null);
@@ -255,18 +255,16 @@ export default function ProductsPage() {
         const tagNames = tags.map((t: any) => t.name).join(', ');
         const catNames = categories.map((c: any) => c.name).join(', ');
         const ws = XLSX.utils.aoa_to_sheet([
-            ['Name', 'Category', 'Active', 'Tags'],
-            ['Sourdough Baguette', 'Bread', 'Yes', 'Wholesale'],
-            ['Berry Danish', 'Pastry', 'Yes', 'Kings Road, St Martin'],
-            ['Cherry Tomatoes (punnet)', 'Fresh Veg', 'Yes', ''],
-            ['Chocolate Eclair', 'Dessert', 'Yes', 'Wholesale, Kings Road'],
-            ['Gluten-Free Roll', 'Bread', 'No', ''],
+            ['Name', 'Category', 'Active', 'Tags', 'Weight', 'Minimum Order', 'Risk Number', 'Yield Amount', 'Yield Unit', 'Allergens', 'Ingredient', 'Product Code', 'Image URL'],
+            ['Brown Sourdough 150gr', 'Bread', 'Yes', 'Wholesale', '150', '20', '1', '1', 'piece', 'Gluten', '', 'BRB5150', ''],
+            ['Fruit Bread 500gr', 'Bread', 'Yes', 'Kings Road, St Martin', '500', '1', '1', '1', 'piece', 'Gluten, Nuts, Sulphites', '', 'BRF5500', ''],
+            ['Seed Bread 350gr', 'Bread', 'Yes', '', '350', '1', '1', '1', 'piece', 'Gluten, Sesame', '', 'BRB350', ''],
             [],
             ['── Reference ──────────────────────────────────────────────────────────'],
             [`Available categories: ${catNames || 'none yet'}`],
             [`Available tags (comma-separate multiple): ${tagNames || 'none yet'}`],
         ]);
-        ws['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 10 }, { wch: 35 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 8 }, { wch: 30 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 25 }, { wch: 14 }, { wch: 40 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
         XLSX.writeFile(wb, 'product_upload_template.xlsx');
@@ -291,6 +289,15 @@ export default function ProductsPage() {
                         category: String(r[1] ?? '').trim(),
                         active: String(r[2] ?? 'Yes').trim(),
                         tags: String(r[3] ?? '').trim(),
+                        weight: String(r[4] ?? '').trim(),
+                        minimum_order: String(r[5] ?? '').trim(),
+                        risk_number: String(r[6] ?? '').trim(),
+                        yield_amount: String(r[7] ?? '').trim(),
+                        yield_unit: String(r[8] ?? '').trim(),
+                        allergens: String(r[9] ?? '').trim(),
+                        ingredient: String(r[10] ?? '').trim(),
+                        product_code: String(r[11] ?? '').trim(),
+                        image_url: String(r[12] ?? '').trim(),
                     }));
                 if (rows.length === 0) {
                     setBulkError('No valid rows found. Make sure the file has product names in column A.');
@@ -323,6 +330,15 @@ export default function ProductsPage() {
                         .map((name) => tagMap.get(name.toLowerCase()))
                         .filter((id): id is string => Boolean(id))
                     : [],
+                weight: r.weight || null,
+                minimum_order: r.minimum_order ? parseInt(r.minimum_order, 10) : null,
+                risk_number: r.risk_number || null,
+                yield_amount: r.yield_amount ? parseFloat(r.yield_amount) : null,
+                yield_unit: r.yield_unit || null,
+                allergens: r.allergens || null,
+                ingredient: r.ingredient || null,
+                product_code: r.product_code || null,
+                image_url: r.image_url || null,
             }));
 
         const skipped = bulkRows.length - toInsert.length;
@@ -873,7 +889,7 @@ export default function ProductsPage() {
                         <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center justify-between gap-4">
                             <div>
                                 <p className="text-sm font-medium">1. Download the template</p>
-                                <p className="text-xs text-muted mt-0.5">Fill in: <strong>Name</strong> (required), <strong>Category</strong>, <strong>Active</strong> (Yes/No), <strong>Tags</strong> (comma-separated, must match exactly)</p>
+                                <p className="text-xs text-muted mt-0.5">Fill in: <strong>Name</strong> (required), Category, Active, Tags, Weight, Min Order, Risk No., Yield Amount/Unit, Allergens, Ingredient, Product Code, Image URL</p>
                             </div>
                             <button onClick={downloadTemplate} className="btn btn-outline btn-sm whitespace-nowrap">
                                 <Download size={14} /> Template

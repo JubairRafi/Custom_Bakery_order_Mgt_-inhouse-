@@ -656,6 +656,26 @@ export default function ProductsPage() {
                             <button onClick={() => setShowEditModal(null)} className="text-muted hover:text-foreground"><X size={20} /></button>
                         </div>
                         {formError && <div className="mb-3 p-2 rounded-lg badge-danger text-sm">{formError}</div>}
+
+                        {/* Image Preview */}
+                        <div
+                            style={{
+                                height: '180px',
+                                borderRadius: '8px',
+                                background: showEditModal.image_url
+                                    ? `url(${showEditModal.image_url}) center/cover no-repeat`
+                                    : 'linear-gradient(135deg, #f1f5f9, #e2e8f0)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: '16px',
+                            }}
+                        >
+                            {!showEditModal.image_url && (
+                                <Package size={40} className="text-muted opacity-30" />
+                            )}
+                        </div>
+
                         <form onSubmit={handleUpdate}>
                             <div className="form-group">
                                 <label className="form-label">Product Name</label>

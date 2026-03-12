@@ -148,16 +148,6 @@ export default function MyProductsPage() {
                             {selectedProduct.ingredient && (
                                 <DetailRow label="Ingredient" value={selectedProduct.ingredient} />
                             )}
-                            {selectedProduct.tags && selectedProduct.tags.length > 0 && (
-                                <div className="flex items-start gap-3 py-2 border-b border-border">
-                                    <span className="text-xs font-semibold text-muted uppercase w-28 shrink-0 pt-0.5">Tags</span>
-                                    <div className="flex flex-wrap gap-1">
-                                        {selectedProduct.tags.map((t) => (
-                                            <span key={t.id} className="badge badge-info text-xs">{t.name}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         <div className="flex justify-end mt-6">

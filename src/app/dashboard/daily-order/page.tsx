@@ -148,6 +148,30 @@ export default function DailyOrderPage() {
         return orderRows.some((r) => r.quantity > 0);
     }
 
+    function getMinOrderViolations(): { product_name: string; minimum_order: number; quantity: number }[] {
+        return orderRows
+            .filter((row) => {
+                if (row.quantity <= 0) return false;
+                const prod = products.find((p) => p.id === row.product_id);
+                return prod?.minimum_order && row.quantity < prod.minimum_order;
+            })
+            .map((row) => {
+                const prod = products.find((p) => p.id === row.product_id)!;
+                return { product_name: row.product_name, minimum_order: prod.minimum_order!, quantity: row.quantity };
+            });
+    }
+
+    function getProductMinOrder(productId: string): number | null {
+        const prod = products.find((p) => p.id === productId);
+        return prod?.minimum_order ?? null;
+    }
+
+    function isQuantityBelowMin(productId: string, quantity: number): boolean {
+        if (quantity <= 0) return false;
+        const minOrder = getProductMinOrder(productId);
+        return minOrder != null && quantity < minOrder;
+    }
+
     function isRowLocked(productId: string): boolean {
         if (!settings || !deliveryDate) return false;
         const prod = products.find((p) => p.id === productId);
@@ -329,8 +353,18 @@ export default function DailyOrderPage() {
                                                         placeholder={locked ? '—' : '0'}
                                                         disabled={locked}
                                                         className="form-input text-center py-1.5"
-                                                        style={locked ? { width: '100px', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : { width: '100px' }}
+                                                        style={locked ? { width: '100px', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : isQuantityBelowMin(row.product_id, row.quantity) ? { width: '100px', borderColor: '#ef4444' } : { width: '100px' }}
                                                     />
+                                                    {(() => {
+                                                        const minOrder = getProductMinOrder(row.product_id);
+                                                        if (isQuantityBelowMin(row.product_id, row.quantity)) {
+                                                            return <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>Min: {minOrder}</p>;
+                                                        }
+                                                        if (minOrder && !locked) {
+                                                            return <p className="text-xs mt-0.5 text-muted">Min: {minOrder}</p>;
+                                                        }
+                                                        return null;
+                                                    })()}
                                                 </td>
                                                 <td>
                                                     {!locked && (
@@ -396,6 +430,22 @@ export default function DailyOrderPage() {
                             </div>
                         )}
 
+                        {/* Minimum Order Violations */}
+                        {getMinOrderViolations().length > 0 && (
+                            <div className="mb-4 p-3 rounded-lg text-sm font-medium flex items-start gap-2 animate-fade-in"
+                                style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-semibold">Minimum order not met:</p>
+                                    {getMinOrderViolations().map((v) => (
+                                        <p key={v.product_name} className="text-xs mt-0.5">
+                                            {v.product_name}: entered {v.quantity}, minimum is {v.minimum_order}
+                                        </p>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Submit */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-sm text-muted">
@@ -408,7 +458,7 @@ export default function DailyOrderPage() {
                             </div>
                             <button
                                 onClick={() => setShowConfirmModal(true)}
-                                disabled={!hasAnyQuantity() || (!!existingOrderId && allProductsLocked)}
+                                disabled={!hasAnyQuantity() || (!!existingOrderId && allProductsLocked) || getMinOrderViolations().length > 0}
                                 className="btn btn-success"
                             >
                                 <Check size={18} /> {existingOrderId ? 'Save Changes' : 'Review & Submit'}

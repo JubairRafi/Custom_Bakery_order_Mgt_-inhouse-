@@ -261,6 +261,31 @@ export default function WeeklyOrderPage() {
         return orderRows.some((row) => Object.values(row.quantities).some((q) => q > 0));
     }
 
+    function getProductMinOrder(productId: string): number | null {
+        const prod = products.find((p) => p.id === productId);
+        return prod?.minimum_order ?? null;
+    }
+
+    function isQuantityBelowMin(productId: string, quantity: number): boolean {
+        if (quantity <= 0) return false;
+        const minOrder = getProductMinOrder(productId);
+        return minOrder != null && quantity < minOrder;
+    }
+
+    function getMinOrderViolations(): { product_name: string; minimum_order: number; date: string; quantity: number }[] {
+        const violations: { product_name: string; minimum_order: number; date: string; quantity: number }[] = [];
+        for (const row of orderRows) {
+            const minOrder = getProductMinOrder(row.product_id);
+            if (!minOrder) continue;
+            for (const [date, qty] of Object.entries(row.quantities)) {
+                if (qty > 0 && qty < minOrder) {
+                    violations.push({ product_name: row.product_name, minimum_order: minOrder, date, quantity: qty });
+                }
+            }
+        }
+        return violations;
+    }
+
     async function handleSubmit() {
         setSubmitting(true);
         setError('');
@@ -426,7 +451,12 @@ export default function WeeklyOrderPage() {
                                 <tbody>
                                     {orderRows.map((row) => (
                                         <tr key={row.product_id}>
-                                            <td className="font-medium text-sm">{row.product_name}</td>
+                                            <td className="font-medium text-sm">
+                                                {row.product_name}
+                                                {getProductMinOrder(row.product_id) && (
+                                                    <span className="text-xs text-muted ml-1">(min: {getProductMinOrder(row.product_id)})</span>
+                                                )}
+                                            </td>
                                             {dates.map((date) => {
                                                 const locked = isRowDayLocked(date, row);
                                                 return (
@@ -440,11 +470,16 @@ export default function WeeklyOrderPage() {
                                                             }
                                                             disabled={locked}
                                                             placeholder={locked ? '—' : '0'}
-                                                            style={locked ? { background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : {}}
+                                                            style={locked ? { background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : isQuantityBelowMin(row.product_id, row.quantities[date]) ? { borderColor: '#ef4444' } : {}}
                                                         />
                                                         {locked && (
                                                             <div className="flex items-center justify-center gap-1 mt-1" style={{ color: '#ef4444', fontSize: '10px' }}>
                                                                 <Lock size={9} />
+                                                            </div>
+                                                        )}
+                                                        {!locked && isQuantityBelowMin(row.product_id, row.quantities[date]) && (
+                                                            <div className="text-center mt-0.5" style={{ color: '#ef4444', fontSize: '10px' }}>
+                                                                Min: {getProductMinOrder(row.product_id)}
                                                             </div>
                                                         )}
                                                     </td>
@@ -572,6 +607,22 @@ export default function WeeklyOrderPage() {
                         </div>
                     )}
 
+                    {/* Minimum Order Violations */}
+                    {getMinOrderViolations().length > 0 && (
+                        <div className="mb-4 p-3 rounded-lg text-sm font-medium flex items-start gap-2 animate-fade-in"
+                            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p className="font-semibold">Minimum order not met:</p>
+                                {getMinOrderViolations().map((v, i) => (
+                                    <p key={i} className="text-xs mt-0.5">
+                                        {v.product_name} on {format(parseISO(v.date), 'EEE dd/MM')}: entered {v.quantity}, minimum is {v.minimum_order}
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Submit Button */}
                     {(() => {
                         const allDaysLocked = selectedMonday && orderRows.length > 0
@@ -591,7 +642,7 @@ export default function WeeklyOrderPage() {
                                 </div>
                                 <button
                                     onClick={() => setShowConfirmModal(true)}
-                                    disabled={!hasAnyQuantity() || (!!existingOrderId && allDaysLocked)}
+                                    disabled={!hasAnyQuantity() || (!!existingOrderId && allDaysLocked) || getMinOrderViolations().length > 0}
                                     className="btn btn-success"
                                     style={{ padding: '12px 28px', fontSize: '0.95rem' }}
                                 >
